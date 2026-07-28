@@ -1,0 +1,98 @@
+<app-page-header
+  title="Dashboard"
+  subtitle="Resumen general del rendimiento de tu operación"
+  [breadcrumbs]="[{ label: 'Inicio', route: '/home' }, { label: 'Dashboard' }]"
+>
+  <button pageHeaderActions nz-button nzType="primary" (click)="onDownloadReport()">
+    <span nz-icon nzType="download" nzTheme="outline"></span>
+    Descargar reporte
+  </button>
+</app-page-header>
+
+<section class="dashboard__stats" aria-label="Estadísticas principales">
+  @for (stat of stats; track stat.id) {
+    <app-stat-card [stat]="stat" />
+  }
+</section>
+
+<div class="dashboard__grid">
+  <nz-card class="dashboard__panel" [nzBordered]="false">
+    <div class="dashboard__panel-header">
+      <div>
+        <h2 class="dashboard__panel-title">Usuarios recientes</h2>
+        <p class="dashboard__panel-subtitle">Últimas cuentas registradas en la plataforma</p>
+      </div>
+      <nz-tag [nzColor]="'blue'">{{ recentUsers.length }} usuarios</nz-tag>
+    </div>
+
+    <nz-table
+      #usersTable
+      [nzData]="recentUsers"
+      [nzShowPagination]="false"
+      nzSize="middle"
+      class="dashboard__table"
+    >
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Alta</th>
+          <th nzAlign="right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of usersTable.data; track user.id) {
+          <tr>
+            <td>
+              <div class="dashboard__user-cell">
+                <span class="dashboard__user-avatar" aria-hidden="true">{{ user.name | initials }}</span>
+                <div class="dashboard__user-meta">
+                  <span class="dashboard__user-name">{{ user.name }}</span>
+                  <span class="dashboard__user-email">{{ user.email }}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <nz-tag>{{ user.role }}</nz-tag>
+            </td>
+            <td>
+              <nz-badge
+                [nzStatus]="statusMeta(user.status).badge"
+                [nzText]="statusMeta(user.status).label"
+              />
+            </td>
+            <td>{{ user.joinedAt }}</td>
+            <td nzAlign="right" class="dashboard__amount">
+              {{ user.totalSpent | currency: 'USD' : 'symbol' : '1.0-0' }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </nz-table>
+  </nz-card>
+
+  <nz-card class="dashboard__panel" [nzBordered]="false">
+    <div class="dashboard__panel-header">
+      <div>
+        <h2 class="dashboard__panel-title">Actividad reciente</h2>
+        <p class="dashboard__panel-subtitle">Eventos más recientes del sistema</p>
+      </div>
+    </div>
+
+    <ul class="dashboard__activity" role="list">
+      @for (activity of activities; track activity.id) {
+        <li class="dashboard__activity-item">
+          <span class="dashboard__activity-icon" [attr.data-tone]="activity.tone" aria-hidden="true">
+            <span nz-icon [nzType]="activity.icon" nzTheme="outline"></span>
+          </span>
+          <div class="dashboard__activity-body">
+            <span class="dashboard__activity-title">{{ activity.title }}</span>
+            <span class="dashboard__activity-description">{{ activity.description }}</span>
+            <span class="dashboard__activity-time">{{ activity.time }}</span>
+          </div>
+        </li>
+      }
+    </ul>
+  </nz-card>
+</div>

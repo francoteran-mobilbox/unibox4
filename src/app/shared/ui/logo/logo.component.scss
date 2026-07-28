@@ -1,0 +1,47 @@
+@use 'abstracts/variables' as *;
+@use 'abstracts/mixins' as *;
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-3;
+  min-width: 0;
+
+  &__mark {
+    @include flex-center-inline;
+    flex-shrink: 0;
+    filter: drop-shadow(0 4px 10px rgba($color-primary, 0.35));
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    overflow: hidden;
+  }
+
+  &__name {
+    font-size: $font-size-md;
+    font-weight: $font-weight-bold;
+    letter-spacing: 0.04em;
+    color: $color-text-primary;
+  }
+
+  &__tagline {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $color-text-tertiary;
+  }
+
+  &--light {
+    .logo__name {
+      color: $color-text-inverse;
+    }
+
+    .logo__tagline {
+      color: $color-text-inverse-muted;
+    }
+  }
+}

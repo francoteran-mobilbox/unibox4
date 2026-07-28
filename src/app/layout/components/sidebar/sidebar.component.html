@@ -1,0 +1,101 @@
+<div class="sidebar__brand">
+  <app-logo [collapsed]="collapsed()" variant="light" />
+</div>
+
+<nav class="sidebar__nav" aria-label="Navegación principal">
+  <ul nz-menu nzTheme="dark" nzMode="inline" class="sidebar__menu" [nzInlineCollapsed]="collapsed()">
+    @for (item of menuItems; track item.id) {
+      @if (item.children) {
+        <li
+          nz-submenu
+          nzTitle="{{ item.label }}"
+          [nzIcon]="item.icon"
+          class="sidebar__submenu"
+        >
+          <ul>
+            @for (child of item.children; track child.id) {
+              <li
+                nz-menu-item
+                [nzSelected]="false"
+                class="sidebar__submenu-item"
+                [routerLink]="child.route"
+                routerLinkActive="sidebar__link--active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                (click)="navigated.emit()"
+              >
+                <span nz-icon [nzType]="child.icon" nzTheme="outline"></span>
+                <span class="sidebar__label">
+                  {{ child.label }}
+                  @if (child.id === 'recibidas') {
+                    <nz-badge
+                      [nzCount]="inboxService.recibidas.count()"
+                      [nzShowZero]="false"
+                      nzSize="small"
+                      class="sidebar__badge"
+                    ></nz-badge>
+                  } @else if (child.id === 'enviadas') {
+                    <nz-badge
+                      [nzCount]="inboxService.enviadas.count()"
+                      [nzShowZero]="false"
+                      nzSize="small"
+                      class="sidebar__badge"
+                    ></nz-badge>
+                  }
+                </span>
+              </li>
+            }
+          </ul>
+        </li>
+      } @else if (item.route) {
+        <li
+          nz-menu-item
+          [nzSelected]="false"
+          [routerLink]="item.route"
+          routerLinkActive="sidebar__link--active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          (click)="navigated.emit()"
+        >
+          <span nz-icon [nzType]="item.icon" nzTheme="outline"></span>
+          <span class="sidebar__label">{{ item.label }}</span>
+        </li>
+      } @else {
+        <li nz-menu-item [nzSelected]="false">
+          <button
+            type="button"
+            class="sidebar__link sidebar__link--button"
+            [nz-tooltip]="collapsed() ? item.label : ''"
+            nzTooltipPlacement="right"
+            (click)="onMenuItemClick(item)"
+          >
+            <span nz-icon [nzType]="item.icon" nzTheme="outline"></span>
+            <span class="sidebar__label">{{ item.label }}</span>
+          </button>
+        </li>
+      }
+    }
+  </ul>
+</nav>
+
+<div class="sidebar__footer">
+  <ul
+    nz-menu
+    nzTheme="dark"
+    nzMode="inline"
+    class="sidebar__menu"
+    [nzInlineCollapsed]="collapsed()"
+    [nzSelectable]="false"
+  >
+    <li nz-menu-item [nzSelected]="false">
+      <button
+        type="button"
+        class="sidebar__link sidebar__link--button sidebar__link--logout"
+        [nz-tooltip]="collapsed() ? 'Cerrar sesión' : ''"
+        nzTooltipPlacement="right"
+        (click)="onLogout()"
+      >
+        <span nz-icon nzType="logout" nzTheme="outline"></span>
+        <span class="sidebar__label">Cerrar sesión</span>
+      </button>
+    </li>
+  </ul>
+</div>

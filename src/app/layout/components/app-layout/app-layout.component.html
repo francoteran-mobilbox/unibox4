@@ -1,0 +1,29 @@
+<div
+  class="layout"
+  [class.layout--collapsed]="layout.sidebarCollapsed()"
+  [class.layout--mobile-open]="layout.mobileSidebarOpen()"
+>
+  <aside id="app-sidebar" class="layout__sidebar" aria-label="Barra lateral">
+    <app-sidebar
+      [collapsed]="layout.sidebarCollapsed()"
+      [mobileOpen]="layout.mobileSidebarOpen()"
+      (navigated)="onNavigated()"
+    />
+  </aside>
+
+  @if (layout.mobileSidebarOpen()) {
+    <div class="layout__backdrop" aria-hidden="true" (click)="onBackdropClick()"></div>
+  }
+
+  <div class="layout__main">
+    <header class="layout__header">
+      <app-header (menuToggle)="onMenuToggle()" />
+    </header>
+
+    <main class="layout__content" id="main-content">
+      <div class="layout__content-inner">
+        <router-outlet />
+      </div>
+    </main>
+  </div>
+</div>

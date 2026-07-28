@@ -1,0 +1,113 @@
+@use 'abstracts/variables' as *;
+@use 'abstracts/mixins' as *;
+
+:host {
+  @include flex-between;
+  width: 100%;
+  height: $header-height;
+  padding-inline: $space-4;
+  background: rgba($color-bg-surface, 0.86);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid $color-border;
+
+  @include respond-above($bp-md) {
+    padding-inline: $space-6;
+  }
+}
+
+.header {
+  &__start,
+  &__end {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__icon-button {
+    @include reset-button;
+    @include flex-center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: $radius-md;
+    font-size: 1.125rem;
+    color: $color-text-secondary;
+    transition:
+      background-color $transition-fast,
+      color $transition-fast;
+
+    &:hover {
+      color: $color-text-primary;
+      background: rgba(15, 23, 42, 0.06);
+    }
+  }
+
+  &__divider {
+    width: 1px;
+    height: 1.5rem;
+    margin-inline: $space-2;
+    background: $color-border;
+  }
+
+  &__user {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-1 $space-2;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background-color $transition-fast;
+
+    &:hover {
+      background: rgba(15, 23, 42, 0.06);
+    }
+  }
+
+  &__avatar {
+    background: linear-gradient(135deg, $color-primary, $color-primary-active);
+    font-weight: $font-weight-semibold;
+  }
+
+  &__user-info {
+    display: none;
+    flex-direction: column;
+    line-height: 1.2;
+
+    @include respond-above($bp-md) {
+      display: flex;
+    }
+  }
+
+  &__user-name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+
+  &__user-role {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__user-caret {
+    display: none;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+
+    @include respond-above($bp-md) {
+      display: inline-flex;
+    }
+  }
+
+  &__menu {
+    min-width: 12rem;
+  }
+
+  &__menu-user {
+    cursor: default;
+  }
+
+  &__menu-email {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+}

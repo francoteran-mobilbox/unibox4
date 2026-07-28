@@ -1,0 +1,142 @@
+import { ActivityItem } from '@core/models/activity.model';
+import { RecentUser } from '@core/models/recent-user.model';
+import { StatCardData } from '@core/models/stat-card.model';
+
+export const DASHBOARD_STATS: readonly StatCardData[] = [
+  {
+    id: 'revenue',
+    label: 'Ingresos totales',
+    value: '$84,254',
+    icon: 'dollar',
+    trend: 12.5,
+    trendLabel: 'vs. mes anterior',
+    accent: 'blue',
+  },
+  {
+    id: 'users',
+    label: 'Usuarios activos',
+    value: '8,642',
+    icon: 'team',
+    trend: 8.2,
+    trendLabel: 'vs. mes anterior',
+    accent: 'green',
+  },
+  {
+    id: 'orders',
+    label: 'Pedidos',
+    value: '1,429',
+    icon: 'shopping-cart',
+    trend: -2.4,
+    trendLabel: 'vs. mes anterior',
+    accent: 'violet',
+  },
+  {
+    id: 'conversion',
+    label: 'Conversión',
+    value: '3.8%',
+    icon: 'rise',
+    trend: 0.6,
+    trendLabel: 'vs. mes anterior',
+    accent: 'orange',
+  },
+];
+
+export const RECENT_USERS: readonly RecentUser[] = [
+  {
+    id: 'usr-101',
+    name: 'Sofía Herrera',
+    email: 'sofia.herrera@acme.co',
+    role: 'Administradora',
+    status: 'active',
+    joinedAt: '12/07/2026',
+    totalSpent: 4820,
+  },
+  {
+    id: 'usr-102',
+    name: 'Diego Ramírez',
+    email: 'diego.ramirez@norte.io',
+    role: 'Editor',
+    status: 'active',
+    joinedAt: '10/07/2026',
+    totalSpent: 2190,
+  },
+  {
+    id: 'usr-103',
+    name: 'Lucía Fernández',
+    email: 'lucia.fernandez@delta.mx',
+    role: 'Lector',
+    status: 'pending',
+    joinedAt: '08/07/2026',
+    totalSpent: 0,
+  },
+  {
+    id: 'usr-104',
+    name: 'Martín Castillo',
+    email: 'martin.castillo@orbita.dev',
+    role: 'Editor',
+    status: 'active',
+    joinedAt: '05/07/2026',
+    totalSpent: 1360,
+  },
+  {
+    id: 'usr-105',
+    name: 'Camila Torres',
+    email: 'camila.torres@lumen.ar',
+    role: 'Lector',
+    status: 'inactive',
+    joinedAt: '01/07/2026',
+    totalSpent: 740,
+  },
+  {
+    id: 'usr-106',
+    name: 'Andrés Vega',
+    email: 'andres.vega@pacifico.cl',
+    role: 'Administrador',
+    status: 'active',
+    joinedAt: '28/06/2026',
+    totalSpent: 6015,
+  },
+];
+
+export const RECENT_ACTIVITY: readonly ActivityItem[] = [
+  {
+    id: 'act-1',
+    icon: 'user-add',
+    tone: 'green',
+    title: 'Nueva usuaria registrada',
+    description: 'Sofía Herrera creó una cuenta con rol Administradora',
+    time: 'Hace 12 min',
+  },
+  {
+    id: 'act-2',
+    icon: 'shopping',
+    tone: 'blue',
+    title: 'Pedido #8432 completado',
+    description: 'Compra por $1,240 procesada correctamente',
+    time: 'Hace 38 min',
+  },
+  {
+    id: 'act-3',
+    icon: 'file-text',
+    tone: 'violet',
+    title: 'Reporte mensual generado',
+    description: 'El reporte de junio está listo para descargar',
+    time: 'Hace 2 h',
+  },
+  {
+    id: 'act-4',
+    icon: 'exclamation-circle',
+    tone: 'orange',
+    title: 'Pago reintentado',
+    description: 'El cobro a delta.mx se reintentó con éxito',
+    time: 'Hace 4 h',
+  },
+  {
+    id: 'act-5',
+    icon: 'setting',
+    tone: 'red',
+    title: 'Política de acceso actualizada',
+    description: 'Se activó la verificación en dos pasos para editores',
+    time: 'Ayer',
+  },
+];

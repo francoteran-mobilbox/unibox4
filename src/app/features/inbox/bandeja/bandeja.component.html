@@ -1,0 +1,171 @@
+<app-page-header
+  [title]="config().title"
+  [subtitle]="config().subtitle"
+  [breadcrumbs]="[
+    { label: 'Inicio', route: '/home' },
+    { label: 'Inbox', route: '/inbox' },
+    { label: config().title },
+  ]"
+/>
+
+<div class="bandeja__toolbar">
+  <nz-input-group [nzPrefix]="searchPrefixIcon" class="bandeja__search">
+    <input
+      nz-input
+      type="text"
+      placeholder="Buscar por tarea o proceso…"
+      [value]="searchText()"
+      (input)="onSearch($event)"
+      aria-label="Filtrar tareas"
+    />
+  </nz-input-group>
+  <ng-template #searchPrefixIcon>
+    <span nz-icon nzType="search" nzTheme="outline"></span>
+  </ng-template>
+
+  <button
+    nz-button
+    class="bandeja__reload"
+    [nzLoading]="isLoading()"
+    nz-tooltip="Recargar"
+    nzTooltipPlacement="bottom"
+    aria-label="Recargar tareas"
+    (click)="onReload()"
+  >
+    <span nz-icon nzType="reload" nzTheme="outline"></span>
+  </button>
+</div>
+
+@if (pasoFallido()) {
+  <nz-card class="bandeja__error-card" [nzBordered]="false">
+    <nz-empty
+      nzNotFoundImage="simple"
+      [nzNotFoundContent]="errorContent"
+    ></nz-empty>
+    <ng-template #errorContent>
+      <span class="bandeja__error-text">
+        No se pudieron cargar las tareas. Verifica la conexión o inténtalo de nuevo.
+      </span>
+      <button nz-button nzType="primary" (click)="onReload()" class="bandeja__retry-btn">
+        Reintentar
+      </button>
+    </ng-template>
+  </nz-card>
+} @else {
+  <nz-card class="bandeja__card" [nzBordered]="false">
+    <nz-table
+      #bandejaTable
+      [nzData]="actividades()"
+      [nzLoading]="isLoading()"
+      [nzShowPagination]="false"
+      nzSize="middle"
+      nzTableLayout="fixed"
+      class="bandeja__table"
+    >
+      <thead>
+        <tr>
+          <th class="col-tarea">Tarea / Proceso en ejecución</th>
+          <th class="col-estado">Estado</th>
+          <th class="col-fechas">Inicio – Tope</th>
+          <th class="col-acciones">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (actividades().length === 0 && !isLoading()) {
+          <tr class="bandeja__empty-row">
+            <td [attr.colspan]="4">
+              <nz-empty
+                nzNotFoundImage="simple"
+                [nzNotFoundContent]="searchText() ? 'No hay resultados para este filtro' : config().emptyText"
+              />
+            </td>
+          </tr>
+        }
+
+        @for (act of bandejaTable.data; track act.activityrunning_id) {
+          <tr>
+            <td class="col-tarea">
+              <div class="bandeja__tarea-cell">
+                <span class="bandeja__tarea-nombre">{{
+                  act.actividad.activity_name
+                }}</span>
+                <span class="bandeja__tarea-proceso">{{
+                  act.proceso_en_ejecucion.processrunnig_name
+                }}</span>
+              </div>
+            </td>
+
+            <td class="col-estado">
+              <span class="bandeja__estado">
+                <span
+                  class="bandeja__estado-icono"
+                  [style.color]="estadoMeta(act).color"
+                  aria-hidden="true"
+                >
+                  <span
+                    nz-icon
+                    [nzType]="estadoMeta(act).icon"
+                    nzTheme="outline"
+                  ></span>
+                </span>
+                <span>{{ act.state_activity.statetype_name }}</span>
+              </span>
+            </td>
+
+            <td class="col-fechas">
+              <div class="bandeja__fechas-cell">
+                <span class="bandeja__fecha">
+                  <span class="bandeja__fecha-label">Inicio</span>
+                  {{ formatDate(act.creation_date) }}
+                </span>
+                <span class="bandeja__fecha-divider" aria-hidden="true">–</span>
+                <span class="bandeja__fecha">
+                  <span class="bandeja__fecha-label">Tope</span>
+                  {{ formatDate(act.limit_date) }}
+                </span>
+              </div>
+            </td>
+
+            <td class="col-acciones">
+              <div class="bandeja__acciones">
+                <button
+                  nz-button
+                  nzType="text"
+                  class="bandeja__accion-btn"
+                  nz-tooltip="Realizar tarea"
+                  nzTooltipPlacement="bottom"
+                  aria-label="Realizar tarea"
+                  (click)="onAccion('Realizar tarea')"
+                >
+                  <span nz-icon nzType="carry-out" nzTheme="outline"></span>
+                </button>
+                <button
+                  nz-button
+                  nzType="text"
+                  class="bandeja__accion-btn"
+                  nz-tooltip="Ver registro"
+                  nzTooltipPlacement="bottom"
+                  aria-label="Ver registro"
+                  (click)="onAccion('Ver registro')"
+                >
+                  <span nz-icon nzType="file-text" nzTheme="outline"></span>
+                </button>
+                <button
+                  nz-button
+                  nzType="text"
+                  class="bandeja__accion-btn"
+                  nz-tooltip="Derivar tarea"
+                  nzTooltipPlacement="bottom"
+                  aria-label="Derivar tarea"
+                  (click)="onAccion('Derivar tarea')"
+                >
+                  <span nz-icon nzType="send" nzTheme="outline"></span>
+                </button>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </nz-table>
+  </nz-card>
+}

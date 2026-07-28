@@ -1,0 +1,55 @@
+<div class="header__start">
+  <button
+    type="button"
+    class="header__icon-button"
+    aria-label="Alternar menú lateral"
+    aria-controls="app-sidebar"
+    (click)="menuToggle.emit()"
+  >
+    <span nz-icon nzType="menu-fold" nzTheme="outline"></span>
+  </button>
+</div>
+
+<div class="header__end">
+  <button
+    type="button"
+    class="header__icon-button"
+    aria-label="Notificaciones"
+    nz-tooltip="Notificaciones"
+    nzTooltipPlacement="bottom"
+  >
+    <nz-badge nz-dot nz-offset="[-4, 6]">
+      <span nz-icon nzType="bell" nzTheme="outline"></span>
+    </nz-badge>
+  </button>
+
+  <span class="header__divider" aria-hidden="true"></span>
+
+  @if (user(); as currentUser) {
+    <a nz-dropdown [nzDropdownMenu]="userMenu" nzTrigger="click" nzPlacement="bottomRight" class="header__user" aria-label="Menú de usuario">
+      <nz-avatar
+        [nzSize]="36"
+        [nzText]="currentUser.name | initials"
+        class="header__avatar"
+      ></nz-avatar>
+      <span class="header__user-info">
+        <span class="header__user-name">{{ currentUser.name }}</span>
+        <span class="header__user-role">{{ currentUser.role }}</span>
+      </span>
+      <span nz-icon nzType="down" nzTheme="outline" class="header__user-caret"></span>
+    </a>
+
+    <nz-dropdown-menu #userMenu="nzDropdownMenu">
+      <ul nz-menu class="header__menu">
+        <li nz-menu-item [nzSelected]="false" class="header__menu-user" [nzDisabled]="true">
+          <span class="header__menu-email">{{ currentUser.email }}</span>
+        </li>
+        <li nz-menu-divider></li>
+        <li nz-menu-item [nzSelected]="false" nzDanger (click)="onLogout()">
+          <span nz-icon nzType="logout" nzTheme="outline"></span>
+          <span>Cerrar sesión</span>
+        </li>
+      </ul>
+    </nz-dropdown-menu>
+  }
+</div>

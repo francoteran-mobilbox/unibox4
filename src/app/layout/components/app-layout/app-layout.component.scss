@@ -1,0 +1,99 @@
+@use 'abstracts/variables' as *;
+@use 'abstracts/mixins' as *;
+
+.layout {
+  min-height: 100vh;
+
+  &__sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: $sidebar-width;
+    z-index: $z-sidebar;
+    transform: translateX(-100%);
+    transition:
+      transform $transition-slow,
+      width $transition-slow;
+    will-change: transform, width;
+
+    @include respond-above($bp-lg) {
+      transform: translateX(0);
+    }
+  }
+
+  &--mobile-open &__sidebar {
+    transform: translateX(0);
+    box-shadow: $shadow-xl;
+  }
+
+  &__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: $z-backdrop;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(2px);
+    animation: layout-fade-in $transition-base both;
+
+    @include respond-above($bp-lg) {
+      display: none;
+    }
+  }
+
+  &__main {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-width: 0;
+    transition: margin-left $transition-slow;
+
+    @include respond-above($bp-lg) {
+      margin-left: $sidebar-width;
+    }
+  }
+
+  &__header {
+    position: sticky;
+    top: 0;
+    z-index: $z-header;
+  }
+
+  &__content {
+    flex: 1;
+    width: 100%;
+  }
+
+  &__content-inner {
+    max-width: $content-max-width;
+    margin-inline: auto;
+    padding: $space-6 $space-4 $space-10;
+
+    @include respond-above($bp-md) {
+      padding: $space-8 $space-6 $space-12;
+    }
+
+    @include respond-above($bp-xl) {
+      padding-inline: $space-8;
+    }
+  }
+}
+
+@include respond-above($bp-lg) {
+  .layout--collapsed {
+    .layout__sidebar {
+      width: $sidebar-width-collapsed;
+    }
+
+    .layout__main {
+      margin-left: $sidebar-width-collapsed;
+    }
+  }
+}
+
+@keyframes layout-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

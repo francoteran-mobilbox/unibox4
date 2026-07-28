@@ -1,0 +1,20 @@
+<article class="stat-card" [attr.data-accent]="stat().accent">
+  <div class="stat-card__icon" aria-hidden="true">
+    <span nz-icon [nzType]="stat().icon" nzTheme="outline"></span>
+  </div>
+
+  <div class="stat-card__body">
+    <span class="stat-card__label">{{ stat().label }}</span>
+    <span class="stat-card__value">{{ stat().value }}</span>
+
+    <span
+      class="stat-card__trend"
+      [class.stat-card__trend--down]="!trendPositive()"
+      [attr.aria-label]="'Variación: ' + trendValue()"
+    >
+      <span nz-icon [nzType]="trendIcon()" nzTheme="outline"></span>
+      <strong>{{ trendValue() }}</strong>
+      <span class="stat-card__trend-label">{{ stat().trendLabel }}</span>
+    </span>
+  </div>
+</article>

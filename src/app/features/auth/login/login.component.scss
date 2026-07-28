@@ -1,0 +1,215 @@
+@use 'abstracts/variables' as *;
+@use 'abstracts/mixins' as *;
+
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.login {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: 1fr;
+
+  @include respond-above($bp-lg) {
+    grid-template-columns: minmax(28rem, 44%) 1fr;
+  }
+
+  // -------------------------------------------------------------------------
+  // Brand panel
+  // -------------------------------------------------------------------------
+  &__hero {
+    position: relative;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    padding: $space-16;
+    overflow: hidden;
+    color: $color-text-inverse;
+    background:
+      radial-gradient(60rem 30rem at 110% -10%, rgba($color-primary, 0.35), transparent 60%),
+      linear-gradient(160deg, #0b1220 0%, #101a30 55%, #0d1f3c 100%);
+
+    @include respond-above($bp-lg) {
+      display: flex;
+    }
+  }
+
+  &__hero-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: $space-6;
+    max-width: 26rem;
+  }
+
+  &__hero-title {
+    font-size: clamp(1.75rem, 2.4vw, 2.5rem);
+    font-weight: $font-weight-bold;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    color: #fff;
+  }
+
+  &__hero-text {
+    font-size: $font-size-md;
+    line-height: 1.7;
+    color: $color-text-inverse-muted;
+  }
+
+  &__hero-points {
+    @include reset-list;
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: $space-3;
+      font-size: $font-size-sm;
+      color: $color-text-inverse-muted;
+
+      [nz-icon] {
+        color: #69b1ff;
+        font-size: 1rem;
+      }
+    }
+  }
+
+  &__hero-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.5;
+    pointer-events: none;
+
+    &--one {
+      width: 22rem;
+      height: 22rem;
+      right: -6rem;
+      top: -6rem;
+      background: rgba($color-primary, 0.55);
+    }
+
+    &--two {
+      width: 18rem;
+      height: 18rem;
+      left: -5rem;
+      bottom: -5rem;
+      background: rgba($color-violet, 0.4);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Form panel
+  // -------------------------------------------------------------------------
+  &__panel {
+    @include flex-center;
+    padding: $space-8 $space-4;
+    background:
+      radial-gradient(40rem 20rem at 50% -20%, rgba($color-primary, 0.06), transparent 65%),
+      $color-bg-app;
+
+    @include respond-above($bp-md) {
+      padding: $space-12 $space-8;
+    }
+  }
+
+  &__card {
+    @include card;
+    width: 100%;
+    max-width: 26.5rem;
+    padding: $space-8 $space-6;
+    box-shadow: $shadow-lg;
+
+    @include respond-above($bp-md) {
+      padding: $space-10 $space-8;
+    }
+  }
+
+  &__card-brand {
+    display: flex;
+    justify-content: center;
+    margin-bottom: $space-6;
+
+    @include respond-above($bp-lg) {
+      display: none;
+    }
+  }
+
+  &__card-header {
+    margin-bottom: $space-5;
+    text-align: left;
+  }
+
+  &__title {
+    font-size: $font-size-xl;
+    letter-spacing: -0.02em;
+  }
+
+  &__subtitle {
+    margin-top: $space-1;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+
+  &__hint {
+    margin-bottom: $space-5;
+    border-radius: $radius-md;
+  }
+
+  &__input {
+    border-radius: $radius-md;
+  }
+
+  &__input-icon {
+    color: $color-text-tertiary;
+  }
+
+  &__password-toggle {
+    @include reset-button;
+    color: $color-text-tertiary;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $color-text-primary;
+    }
+  }
+
+  &__options {
+    @include flex-between;
+    margin-bottom: $space-6;
+    gap: $space-3;
+    flex-wrap: wrap;
+  }
+
+  &__forgot {
+    @include reset-button;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $color-primary-active;
+    }
+  }
+
+  &__submit {
+    height: 2.75rem;
+    font-weight: $font-weight-semibold;
+    border-radius: $radius-md;
+    box-shadow: 0 6px 16px rgba($color-primary, 0.28);
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: center;
+    gap: $space-2;
+    margin-top: $space-6;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+}

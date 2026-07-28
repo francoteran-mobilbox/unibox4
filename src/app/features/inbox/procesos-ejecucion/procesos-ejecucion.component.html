@@ -1,0 +1,200 @@
+<app-page-header
+  title="Procesos en ejecución"
+  subtitle="Procesos activos con tareas pendientes o en curso"
+  [breadcrumbs]="[
+    { label: 'Inicio', route: '/home' },
+    { label: 'Inbox', route: '/inbox' },
+    { label: 'Procesos en ejecución' },
+  ]"
+/>
+
+<div class="procesos__toolbar">
+  <nz-input-group [nzPrefix]="searchPrefixIcon" class="procesos__search">
+    <input
+      nz-input
+      type="text"
+      placeholder="Buscar por proceso…"
+      [value]="searchText()"
+      (input)="onSearch($event)"
+      aria-label="Filtrar procesos"
+    />
+  </nz-input-group>
+  <ng-template #searchPrefixIcon>
+    <span nz-icon nzType="search" nzTheme="outline"></span>
+  </ng-template>
+
+  <button
+    nz-button
+    class="procesos__reload"
+    [nzLoading]="isLoading()"
+    nz-tooltip="Recargar"
+    nzTooltipPlacement="bottom"
+    aria-label="Recargar procesos"
+    (click)="onReload()"
+  >
+    <span nz-icon nzType="reload" nzTheme="outline"></span>
+  </button>
+</div>
+
+@if (pasoFallido()) {
+  <nz-card class="procesos__error-card" [nzBordered]="false">
+    <nz-empty
+      nzNotFoundImage="simple"
+      [nzNotFoundContent]="errorContent"
+    ></nz-empty>
+    <ng-template #errorContent>
+      <span class="procesos__error-text">
+        No se pudieron cargar los procesos. Verifica la conexión o inténtalo de nuevo.
+      </span>
+      <button nz-button nzType="primary" (click)="onReload()" class="procesos__retry-btn">
+        Reintentar
+      </button>
+    </ng-template>
+  </nz-card>
+} @else {
+  <nz-card class="procesos__card" [nzBordered]="false">
+    <nz-table
+      #procesosTable
+      [nzData]="filteredProcesos()"
+      [nzLoading]="isLoading()"
+      [nzShowPagination]="false"
+      nzSize="middle"
+      nzTableLayout="fixed"
+      class="procesos__table"
+    >
+      <thead>
+        <tr>
+          <th class="col-expand"></th>
+          <th class="col-proceso">Proceso ejecución / Tarea</th>
+          <th class="col-estado">Estado</th>
+          <th class="col-fechas">Inicio – Tope</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (filteredProcesos().length === 0 && !isLoading()) {
+          <tr class="procesos__empty-row">
+            <td [attr.colspan]="4">
+              <nz-empty
+                nzNotFoundImage="simple"
+                [nzNotFoundContent]="searchText() ? 'No hay resultados para este filtro' : 'No hay procesos en ejecución'"
+              />
+            </td>
+          </tr>
+        }
+
+        @for (proc of procesosTable.data; track proc.processrunning_id) {
+          <tr class="procesos__main-row" [class.procesos__main-row--expanded]="expandedIds().has(proc.processrunning_id)">
+            <td class="col-expand">
+              <button
+                type="button"
+                class="procesos__expand-btn"
+                [attr.aria-expanded]="expandedIds().has(proc.processrunning_id)"
+                aria-label="Ver detalles"
+                (click)="toggleExpand(proc.processrunning_id)"
+              >
+                <span
+                  nz-icon
+                  [nzType]="expandedIds().has(proc.processrunning_id) ? 'down' : 'right'"
+                  nzTheme="outline"
+                ></span>
+              </button>
+            </td>
+
+            <td class="col-proceso">
+              <div class="procesos__proceso-cell">
+                <span class="procesos__proceso-nombre">{{ proc.processrunning_name }}</span>
+              </div>
+            </td>
+
+            <td class="col-estado">
+              <span class="procesos__estado">
+                <span
+                  class="procesos__estado-icono"
+                  [style.color]="estadoColor(proc.id_estado_ejecucion)"
+                  aria-hidden="true"
+                >
+                  <span
+                    nz-icon
+                    [nzType]="estadoIcono(proc.id_estado_ejecucion)"
+                    nzTheme="outline"
+                  ></span>
+                </span>
+                <span>{{ proc.id_estado_ejecucion }}</span>
+              </span>
+            </td>
+
+            <td class="col-fechas">
+              <div class="procesos__fechas-cell">
+                <span class="procesos__fecha">
+                  <span class="procesos__fecha-label">Inicio</span>
+                  {{ formatDate(proc.creation_date) }}
+                </span>
+                <span class="procesos__fecha-divider" aria-hidden="true">–</span>
+                <span class="procesos__fecha">
+                  <span class="procesos__fecha-label">Tope</span>
+                  {{ formatDate(proc.limit_date) }}
+                </span>
+              </div>
+            </td>
+          </tr>
+
+          <tr class="procesos__expand-row" [class.procesos__expand-row--hidden]="!expandedIds().has(proc.processrunning_id)">
+              <td colspan="4">
+                <div class="procesos__expand-content">
+                  @if (cargandoActividades().has(proc.processrunning_id)) {
+                    <div class="procesos__expand-loading">
+                      <nz-spin nzSimple></nz-spin>
+                      <span>Cargando actividades…</span>
+                    </div>
+                  } @else {
+                    @let acts = actividadesCache()[proc.processrunning_id] ?? emptyArr;
+                    @if (acts.length === 0) {
+                      <nz-empty
+                        nzNotFoundImage="simple"
+                        nzNotFoundContent="No hay actividades para este proceso"
+                      />
+                    } @else {
+                      <div class="procesos__actividades-grid" role="table">
+                        <div class="procesos__act-header" role="row">
+                          <span class="col-act-nombre" role="columnheader">Actividad</span>
+                          <span class="col-act-estado" role="columnheader">Estado</span>
+                          <span class="col-act-encargado" role="columnheader">Encargado</span>
+                          <span class="col-act-creacion" role="columnheader">Creación</span>
+                          <span class="col-act-tope" role="columnheader">Tope</span>
+                          <span class="col-act-accion" role="columnheader"></span>
+                        </div>
+                        @for (act of acts; track act.activityrunning_id) {
+                          <div class="procesos__act-row" role="row">
+                            <span class="col-act-nombre" role="cell">
+                              <span class="procesos__act-nombre">{{ act.activity_name }}</span>
+                            </span>
+                            <span class="col-act-estado" role="cell">
+                              <span class="procesos__act-estado">{{ act.statetype_id }}</span>
+                            </span>
+                            <span class="col-act-encargado" role="cell">
+                              {{ encargadoTexto(act) }}
+                            </span>
+                            <span class="col-act-creacion" role="cell">
+                              <span class="procesos__act-fecha">{{ formatDate(act.creation_date) }}</span>
+                            </span>
+                            <span class="col-act-tope" role="cell">
+                              <span class="procesos__act-fecha">{{ formatDate(act.limit_date) }}</span>
+                            </span>
+                            <span class="col-act-accion" role="cell">
+                              <button type="button" class="procesos__ver-btn" nz-tooltip="Ver Registro" nzTooltipPlacement="left" (click)="$event.stopPropagation()">
+                                <span nz-icon nzType="eye" nzTheme="outline"></span>
+                              </button>
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    }
+                  }
+                </div>
+              </td>
+            </tr>
+        }
+      </tbody>
+    </nz-table>
+  </nz-card>
+}

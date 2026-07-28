@@ -1,0 +1,131 @@
+<div class="login">
+  <section class="login__hero" aria-hidden="true">
+    <div class="login__hero-content">
+      <app-logo variant="light" />
+      <h2 class="login__hero-title">Gestiona tu operación con claridad</h2>
+      <p class="login__hero-text">
+        Métricas en tiempo real, reportes accionables y un panel diseñado para equipos que se mueven rápido.
+      </p>
+      <ul class="login__hero-points">
+        <li><span nz-icon nzType="check-circle" nzTheme="outline"></span> Analítica en tiempo real</li>
+        <li><span nz-icon nzType="check-circle" nzTheme="outline"></span> Reportes automatizados</li>
+        <li><span nz-icon nzType="check-circle" nzTheme="outline"></span> Seguridad empresarial</li>
+      </ul>
+    </div>
+    <div class="login__hero-glow login__hero-glow--one"></div>
+    <div class="login__hero-glow login__hero-glow--two"></div>
+  </section>
+
+  <section class="login__panel">
+    <div class="login__card u-animate-fade-up">
+      <div class="login__card-brand">
+        <app-logo />
+      </div>
+
+      <header class="login__card-header">
+        <h1 class="login__title">Bienvenido de nuevo</h1>
+        <p class="login__subtitle">Ingresa tus credenciales para acceder a tu cuenta</p>
+      </header>
+
+      <nz-alert
+        nzType="info"
+        nzShowIcon
+        nzMessage="Demo: usa cualquier correo válido y una contraseña de al menos 6 caracteres."
+        class="login__hint"
+      ></nz-alert>
+
+      <form nz-form nzLayout="vertical" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+        <nz-form-item>
+          <nz-form-label nzFor="email" nzRequired>Correo electrónico</nz-form-label>
+          <nz-form-control [nzErrorTip]="emailErrors">
+            <nz-input-group [nzPrefix]="emailPrefixIcon" class="login__input">
+              <input
+                nz-input
+                id="email"
+                type="email"
+                formControlName="email"
+                placeholder="nombre@empresa.com"
+                autocomplete="email"
+                appAutofocus
+              />
+            </nz-input-group>
+            <ng-template #emailPrefixIcon>
+              <span nz-icon nzType="mail" nzTheme="outline" class="login__input-icon"></span>
+            </ng-template>
+            <ng-template #emailErrors let-control>
+              @if (control.hasError('required')) {
+                El correo electrónico es obligatorio
+              }
+              @if (control.hasError('email') && !control.hasError('required')) {
+                Ingresa un correo electrónico válido
+              }
+            </ng-template>
+          </nz-form-control>
+        </nz-form-item>
+
+        <nz-form-item>
+          <nz-form-label nzFor="password" nzRequired>Contraseña</nz-form-label>
+          <nz-form-control [nzErrorTip]="passwordErrors">
+            <nz-input-group [nzPrefix]="passwordPrefixIcon" [nzSuffix]="passwordSuffixIcon" class="login__input">
+              <input
+                nz-input
+                id="password"
+                [type]="passwordVisible() ? 'text' : 'password'"
+                formControlName="password"
+                placeholder="Ingresa tu contraseña"
+                autocomplete="current-password"
+              />
+            </nz-input-group>
+            <ng-template #passwordPrefixIcon>
+              <span nz-icon nzType="lock" nzTheme="outline" class="login__input-icon"></span>
+            </ng-template>
+            <ng-template #passwordSuffixIcon>
+              <button
+                type="button"
+                class="login__password-toggle"
+                [attr.aria-label]="passwordVisible() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                [attr.aria-pressed]="passwordVisible()"
+                (click)="togglePasswordVisibility()"
+              >
+                <span nz-icon [nzType]="passwordVisible() ? 'eye' : 'eye-invisible'" nzTheme="outline"></span>
+              </button>
+            </ng-template>
+            <ng-template #passwordErrors let-control>
+              @if (control.hasError('required')) {
+                La contraseña es obligatoria
+              }
+              @if (control.hasError('minlength') && !control.hasError('required')) {
+                La contraseña debe tener al menos 6 caracteres
+              }
+            </ng-template>
+          </nz-form-control>
+        </nz-form-item>
+
+        <div class="login__options">
+          <label nz-checkbox formControlName="rememberMe">Recordarme</label>
+          <button type="button" class="login__forgot" (click)="onForgotPassword()">
+            Olvidé mi contraseña
+          </button>
+        </div>
+
+        <button
+          nz-button
+          nzType="primary"
+          nzBlock
+          nzSize="large"
+          type="submit"
+          class="login__submit"
+          [nzLoading]="isLoading()"
+          [disabled]="isLoading()"
+        >
+          Iniciar sesión
+        </button>
+      </form>
+
+      <footer class="login__footer">
+        <span>¿No tienes una cuenta?</span>
+        <button type="button" class="login__forgot" (click)="onForgotPassword()">Solicitar acceso</button>
+      </footer>
+    </div>
+  </section>
+</div>

@@ -1,0 +1,49 @@
+@use 'abstracts/variables' as *;
+@use 'abstracts/mixins' as *;
+
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+  margin-bottom: $space-6;
+
+  &__breadcrumb {
+    font-size: $font-size-xs;
+  }
+
+  &__row {
+    @include flex-between;
+    gap: $space-4;
+    flex-wrap: wrap;
+  }
+
+  &__text {
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: $font-size-xl;
+    letter-spacing: -0.02em;
+
+    @include respond-above($bp-md) {
+      font-size: $font-size-2xl;
+    }
+  }
+
+  &__subtitle {
+    margin-top: $space-1;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    flex-shrink: 0;
+
+    &:empty {
+      display: none;
+    }
+  }
+}

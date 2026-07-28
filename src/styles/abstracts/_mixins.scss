@@ -1,0 +1,85 @@
+@use 'variables' as *;
+
+// Media query: applies styles below the given breakpoint (desktop-first).
+@mixin respond-below($breakpoint) {
+  @media (max-width: ($breakpoint - 0.02px)) {
+    @content;
+  }
+}
+
+// Media query: applies styles above the given breakpoint (mobile-first).
+@mixin respond-above($breakpoint) {
+  @media (min-width: $breakpoint) {
+    @content;
+  }
+}
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@mixin flex-center-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin card {
+  background: $color-bg-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+}
+
+@mixin focus-ring {
+  outline: none;
+  box-shadow: $shadow-focus;
+}
+
+@mixin custom-scrollbar($size: 8px, $track: transparent, $thumb: rgba(148, 163, 184, 0.4)) {
+  scrollbar-width: thin;
+  scrollbar-color: $thumb $track;
+
+  &::-webkit-scrollbar {
+    width: $size;
+    height: $size;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: $track;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $thumb;
+    border-radius: $radius-pill;
+  }
+}
+
+@mixin reset-button {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+@mixin reset-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

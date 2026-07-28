@@ -1,0 +1,26 @@
+<span class="logo" [class.logo--light]="variant() === 'light'" [class.logo--collapsed]="collapsed()">
+  <span class="logo__mark" aria-hidden="true">
+    <svg viewBox="0 0 32 32" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="9" fill="url(#logo-gradient)" />
+      <path
+        d="M17.6 5.5 9 17.2h5.4l-1 9.3 8.6-11.7h-5.4l1-9.3Z"
+        fill="#fff"
+        stroke="#fff"
+        stroke-width="1.1"
+        stroke-linejoin="round"
+      />
+      <defs>
+        <linearGradient id="logo-gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#4096ff" />
+          <stop offset="1" stop-color="#0958d9" />
+        </linearGradient>
+      </defs>
+    </svg>
+  </span>
+  @if (!collapsed()) {
+    <span class="logo__text">
+      <span class="logo__name">UBX</span>
+      <span class="logo__tagline">Console</span>
+    </span>
+  }
+</span>

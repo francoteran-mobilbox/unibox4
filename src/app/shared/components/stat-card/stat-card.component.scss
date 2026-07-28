@@ -1,0 +1,93 @@
+@use 'abstracts/variables' as *;
+@use 'abstracts/mixins' as *;
+
+.stat-card {
+  @include card;
+  display: flex;
+  align-items: flex-start;
+  gap: $space-4;
+  padding: $space-5;
+  transition:
+    box-shadow $transition-base,
+    transform $transition-base,
+    border-color $transition-base;
+
+  &:hover {
+    box-shadow: $shadow-md;
+    transform: translateY(-2px);
+    border-color: $color-border-strong;
+  }
+
+  &__icon {
+    @include flex-center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    border-radius: $radius-md;
+    font-size: 1.25rem;
+  }
+
+  &[data-accent='blue'] .stat-card__icon {
+    color: $color-primary;
+    background: $color-primary-soft;
+  }
+
+  &[data-accent='green'] .stat-card__icon {
+    color: $color-success;
+    background: $color-success-soft;
+  }
+
+  &[data-accent='violet'] .stat-card__icon {
+    color: $color-violet;
+    background: $color-violet-soft;
+  }
+
+  &[data-accent='orange'] .stat-card__icon {
+    color: $color-orange;
+    background: $color-orange-soft;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    min-width: 0;
+  }
+
+  &__label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: $color-text-tertiary;
+  }
+
+  &__value {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    letter-spacing: -0.02em;
+    line-height: $line-height-tight;
+    color: $color-text-primary;
+  }
+
+  &__trend {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    margin-top: $space-1;
+    font-size: $font-size-xs;
+    color: $color-success;
+
+    strong {
+      font-weight: $font-weight-semibold;
+    }
+
+    &--down {
+      color: $color-error;
+    }
+  }
+
+  &__trend-label {
+    color: $color-text-tertiary;
+  }
+}
