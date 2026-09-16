@@ -115,7 +115,7 @@ export class DiagramaService {
 
   obtenerTareasProceso(processId: number): Observable<TareasProcesoResponse> {
     return this.http.get<TareasProcesoResponse>(
-      this.buildLocalUrl(`${TAREAS_PROCESO_PATH}${processId}`),
+      this.buildUrl(`${TAREAS_PROCESO_PATH}${processId}`),
     );
   }
 
