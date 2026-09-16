@@ -1,0 +1,2746 @@
+<section class="diagrama">
+  <header class="diagrama__header">
+    <h1 class="diagrama__title">Diagrama</h1>
+    <p class="diagrama__subtitle">
+      Gestion de procesos con tabs independientes para seguimiento de ejecucion y catalogo.
+    </p>
+  </header>
+
+  <nz-card [nzBordered]="false" class="diagrama__card">
+    <nz-tabset [nzSelectedIndex]="activeTabIndex()" (nzSelectedIndexChange)="onTabChange($event)">
+      <nz-tab nzTitle="Procesos en Ejecución">
+        <div class="diagrama__toolbar">
+          <nz-input-group [nzPrefix]="searchProcesosEEPrefixIcon" class="diagrama__search">
+            <input
+              nz-input
+              type="text"
+              placeholder="Buscar por proceso, ID o creador..."
+              [value]="procesosEjecucionSearchText()"
+              (input)="onSearchProcesosEjecucion($event)"
+              aria-label="Filtrar procesos en ejecución"
+            />
+          </nz-input-group>
+          <ng-template #searchProcesosEEPrefixIcon>
+            <span nz-icon nzType="search" nzTheme="outline"></span>
+          </ng-template>
+
+          <button
+            nz-button
+            class="diagrama__reload"
+            [nzLoading]="procesosEjecucionLoading()"
+            nz-tooltip="Recargar"
+            nzTooltipPlacement="bottom"
+            aria-label="Recargar procesos en ejecución"
+            (click)="onRecargarProcesosEjecucion()"
+          >
+            <span nz-icon nzType="reload" nzTheme="outline"></span>
+          </button>
+
+          <span class="diagrama__meta">Total: {{ procesosEjecucionTotal() | number }}</span>
+        </div>
+
+        @if (procesosEjecucionError()) {
+          <nz-alert
+            nzType="error"
+            [nzMessage]="procesosEjecucionError()"
+            nzShowIcon
+            class="diagrama__alert"
+          />
+        }
+
+        <nz-table
+          #procesosEjecucionTable
+          [nzData]="procesosEjecucionFiltrados()"
+          [nzFrontPagination]="false"
+          [nzLoading]="procesosEjecucionLoading()"
+          [nzTotal]="procesosEjecucionTotalFiltrado()"
+          [nzPageIndex]="procesosEjecucionPageIndex()"
+          [nzPageSize]="procesosEjecucionPageSize()"
+          [nzShowSizeChanger]="true"
+          [nzPageSizeOptions]="[10, 20, 50]"
+          (nzQueryParams)="onProcesosEjecucionQueryParamsChange($event)"
+          nzTableLayout="fixed"
+          nzSize="middle"
+          style="overflow-y: auto"
+        >
+          <thead>
+            <tr>
+              <th nzWidth="56px"></th>
+              <th nzWidth="250px">ID Proceso / Nombre </th>
+              <th nzWidth="400px">Proceso en Ejecucion</th>
+              <th nzWidth="60px">Estado</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Creador</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Fecha Limite</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of procesosEjecucionTable.data; track row.processrunning_id) {
+              <tr>
+                <td
+                  [nzExpand]="procesosEjecucionExpanded().has(row.processrunning_id)"
+                  (nzExpandChange)="onExpandProcesosEjecucion(row.processrunning_id, $event)"
+                ></td>
+                <td>
+                  <div class="diagrama__cell-main">
+                    <span
+                      class="diagrama__cell-title"
+                      nz-tooltip
+                      [nzTooltipTitle]="row.process_name"
+                    >{{ row.process_name }}</span>
+                    <span class="diagrama__cell-sub">ID {{ row.process_id }}</span>
+                  </div>
+                </td>
+                <td class="diagrama__cell-processrunning" nz-tooltip [nzTooltipTitle]="row.processrunning_name">
+                  <span
+                      class="diagrama__cell-title"
+                      nz-tooltip
+                      [nzTooltipTitle]="row.process_name"
+                    >{{ row.processrunning_name }}</span>
+                    <span class="diagrama__cell-sub">ID {{ row.processrunning_id }}</span>
+                </td>
+                <td>
+                  <nz-tag class="diagrama__col-medium" [nzColor]="row.id_estado_ejecucion === 'eje' ? 'blue' : 'default'">
+                    {{ row.id_estado_ejecucion }}
+                  </nz-tag>
+                </td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">{{ row.user_login_creator }}</td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">{{ row.limit_date | date: 'dd/MM/yyyy HH:mm' }}</td>
+              </tr>
+              <tr [nzExpand]="procesosEjecucionExpanded().has(row.processrunning_id)">
+                <td></td>
+                <td [attr.colspan]="7" style="width: 100%;">
+                  <div class="diagrama__expanded-content">
+                    @let procesoEE = procesosEjecucionDiagrama(row.processrunning_id);
+
+                    @if (procesoEE?.loading) {
+                      <div style="height: 35px; margin-top: 20px;">
+                        <nz-spin nzTip="Cargando diagrama BPMN..." class="diagrama__bpmn-loading"></nz-spin>
+                      </div>
+                    } @else if (procesoEE?.error) {
+                      <nz-alert
+                        nzType="warning"
+                        [nzMessage]="procesoEE?.error ?? 'No fue posible cargar el diagrama.'"
+                        nzShowIcon
+                        class="diagrama__alert"
+                      />
+                    } @else {
+                      <div class="diagrama__expanded-meta-grid diagrama__expanded-meta-grid--execution">
+                        <span><strong>Creador:</strong> {{ row.user_login_creator }}</span>
+                        <span><strong>Fecha límite:</strong> {{ row.limit_date | date: 'dd/MM/yyyy HH:mm' }}</span>
+                        <span><strong>Tiempo restante:</strong> {{ row.tiempo_restante }}</span>
+                        <span><strong>Estado:</strong> {{ row.id_estado_ejecucion }}</span>
+                      </div>
+                      
+                      @if (isDesktop()) {
+                        <app-bpmn-base-preview
+                          class="diagrama__bpmn-preview"
+                          [legacyXml]="procesoEE?.xml ?? ''"
+                          [executedElementIds]="procesoEE?.executedElementIds ?? []"
+                          [flowProgressItems]="procesoEE?.flowProgressItems ?? []"
+                          [editable]="false"
+                        />
+                      } @else {
+                        <span class="diagrama__mobile-info">Diagrama disponible solo en versión escritorio.</span>
+                      }
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </nz-table>
+      </nz-tab>
+
+      <nz-tab nzTitle="Procesos">
+        <div class="diagrama__toolbar">
+          <nz-input-group [nzPrefix]="searchProcesosPrefixIcon" class="diagrama__search">
+            <input
+              nz-input
+              type="text"
+              placeholder="Buscar por ID, nombre o versión..."
+              [value]="procesosSearchText()"
+              (input)="onSearchProcesos($event)"
+              aria-label="Filtrar procesos"
+            />
+          </nz-input-group>
+          <ng-template #searchProcesosPrefixIcon>
+            <span nz-icon nzType="search" nzTheme="outline"></span>
+          </ng-template>
+
+          <button
+            nz-button
+            nzType="primary"
+            class="diagrama__create"
+            aria-label="Crear proceso"
+            (click)="onAbrirCrearProcesoModal()"
+          >
+            <span nz-icon nzType="plus" nzTheme="outline"></span>
+            Crear Proceso
+          </button>
+
+          <button
+            nz-button
+            class="diagrama__reload"
+            [nzLoading]="procesosLoading()"
+            nz-tooltip="Recargar"
+            nzTooltipPlacement="bottom"
+            aria-label="Recargar procesos"
+            (click)="onRecargarProcesos()"
+          >
+            <span nz-icon nzType="reload" nzTheme="outline"></span>
+          </button>
+
+          <span class="diagrama__meta">
+            Total : {{ procesosTotalCliente() | number }}
+          </span>
+        </div>
+
+        @if (procesosError()) {
+          <nz-alert nzType="error" [nzMessage]="procesosError()" nzShowIcon class="diagrama__alert" />
+        }
+
+        <nz-table
+          #procesosTable
+          [nzData]="procesosFiltrados()"
+          [nzFrontPagination]="true"
+          [nzLoading]="procesosLoading()"
+          [nzPageIndex]="procesosPageIndex()"
+          [nzPageSize]="procesosPageSize()"
+          [nzShowSizeChanger]="true"
+          [nzPageSizeOptions]="[10, 20, 50]"
+          (nzPageIndexChange)="onProcesosPageIndexChange($event)"
+          (nzPageSizeChange)="onProcesosPageSizeChange($event)"
+          nzTableLayout="fixed"
+          nzSize="middle"
+        >
+          <thead>
+            <tr>
+              <th nzWidth="350px">ID Proceso / Nombre</th>
+              <th nzWidth="100px">En Ejecución</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Version</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Modificado por</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Ultima modificacion</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Privado</th>
+              <th class="diagrama__col-medium diagrama__col-desktop-collapsible">Compartido</th>
+              
+              <th class="diagrama__actions-col">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            @for (row of procesosTable.data; track row.id_proceso) {
+              <tr>
+                <td>
+                  <div class="diagrama__cell-main">
+                    <span
+                      class="diagrama__cell-title"
+                      nz-tooltip
+                      [nzTooltipTitle]="row.nombre_proceso"
+                    >{{ row.nombre_proceso }}</span>
+                    <span class="diagrama__cell-sub">ID {{ row.id_proceso }}</span>
+                  </div>
+                </td>
+                <td>
+                  <nz-tag [nzColor]="(row.procesosEE ?? 0) > 0 ? 'blue' : 'default'">
+                    {{ row.procesosEE ?? 0 }}
+                  </nz-tag>
+                </td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">{{ row.version }}</td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">{{ row.modificado_por }}</td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">{{ row.ultima_modificacion | date: 'dd/MM/yyyy HH:mm' }}</td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">
+                  <nz-tag [nzColor]="row.privado ? 'red' : 'green'">
+                    {{ row.privado ? 'Si' : 'No' }}
+                  </nz-tag>
+                </td>
+                <td class="diagrama__col-medium diagrama__col-desktop-collapsible">
+                  <nz-tag [nzColor]="row.compartido ? 'blue' : 'default'">
+                    {{ row.compartido ? 'Si' : 'No' }}
+                  </nz-tag>
+                </td>
+                <td class="diagrama__actions-col">
+                  <button
+                    nz-button
+                    nzType="text"
+                    nz-tooltip
+                    nzTooltipTitle="Editar proceso"
+                    nzTooltipPlacement="bottom"
+                    aria-label="Editar proceso"
+                    (click)="onAbrirEditarProcesoModal(row)"
+                  >
+                    <span nz-icon nzType="setting" nzTheme="outline"></span>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </nz-table>
+      </nz-tab>
+    </nz-tabset>
+
+    <nz-modal
+      [nzVisible]="procesoModalVisible()"
+      [nzTitle]="procesoModalTitulo()"
+      [nzMaskClosable]="false"
+      [nzOkText]="procesoModalBotonGuardarLabel()"
+      nzCancelText="Cancelar"
+      [nzWidth]="isDesktop() ? 900 : 'calc(100vw - 32px)'"
+      nzClassName="proceso-form-modal"
+      (nzOnCancel)="onCerrarProcesoModal()"
+      (nzOnOk)="onGuardarProcesoModal()"
+    >
+      <ng-container  *nzModalContent>
+        @if (procesoValidacionError().length > 0) {
+          <nz-alert
+            nzType="warning"
+            nzShowIcon
+            class="diagrama__alert"
+            nzMessage="Faltan campos obligatorios por configurar"
+            [nzDescription]="tplProcesoCamposFaltantes"
+            [nzCloseable]="true"
+            (nzOnClose)="procesoValidacionError.set([])"
+          />
+        }
+        <ng-template #tplProcesoCamposFaltantes>
+          <ul class="diagrama__validation-list">
+            @for (campo of procesoValidacionError(); track campo) {
+              <li>{{ campo }}</li>
+            }
+          </ul>
+        </ng-template>
+        @if (procesoMecanismoError()) {
+          <nz-alert
+            nzType="error"
+            [nzMessage]="procesoMecanismoError()"
+            nzShowIcon
+            class="diagrama__alert"
+            [nzCloseable]="true"
+            (nzOnClose)="procesoMecanismoError.set('')"
+          />
+        }
+        @if (procesoAdvertenciaEjecucion()) {
+          <nz-alert
+            nzType="warning"
+            [nzMessage]="procesoAdvertenciaEjecucion()"
+            nzShowIcon
+            class="diagrama__alert"
+            [nzCloseable]="true"
+            (nzOnClose)="procesoAdvertenciaEjecucion.set('')"
+          />
+        }
+        <form class="diagrama__process-form" [formGroup]="procesoForm">
+          <div class="diagrama__process-grid">
+            <div class="diagrama__field">
+              <span class="diagrama__field-label">Nombre *</span>
+              <input nz-input type="text" formControlName="nombre" placeholder="Nombre del proceso"/>
+            </div>
+  
+            <div class="diagrama__field">
+              <span class="diagrama__field-label">Responsable *</span>
+              <nz-select
+                formControlName="responsables"
+                nzMode="multiple"
+                nzPlaceHolder="Selecciona responsables"
+                nzAllowClear
+              >
+                @for (option of responsablesOptions(); track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                }
+              </nz-select>
+            </div>
+  
+            <div class="diagrama__field diagrama__field--duration">
+              <span class="diagrama__field-label">Duración *</span>
+              <div class="diagrama__duration-group">
+                <input
+                  nz-input
+                  type="number"
+                  min="1"
+                  formControlName="duracionValor"
+                  placeholder="Valor"
+                />
+                <nz-select formControlName="duracionUnidad" nzPlaceHolder="Unidad">
+                  @for (unit of duracionUnidadOptions; track unit) {
+                    <nz-option [nzValue]="unit" [nzLabel]="unit" />
+                  }
+                </nz-select>
+              </div>
+            </div>
+  
+            <div class="diagrama__field">
+              <span class="diagrama__field-label">Familia procesos *</span>
+              <nz-select formControlName="familiaProceso" nzPlaceHolder="Selecciona familia" nzAllowClear>
+                @for (option of familiasProcesoOptions(); track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                }
+              </nz-select>
+            </div>
+  
+            <div class="diagrama__field diagrama__field--mecanismo">
+              <span class="diagrama__field-label">Visibilidad</span>
+              <div class="diagrama__select-with-icon">
+                <nz-select formControlName="visibilidad" nzPlaceHolder="Selecciona visibilidad" class="diagrama__select-flex">
+                  <nz-option nzLabel="Privado" nzValue="privado" />
+                  <nz-option nzLabel="Publico" nzValue="publico" />
+                </nz-select>
+                @if (mostrarCompartirIcono()) {
+                  <button
+                    nz-button
+                    nzType="text"
+                    nz-tooltip
+                    nzTooltipTitle="Compartir acceso"
+                    nzTooltipPlacement="bottom"
+                    (click)="onAbrirCompartirModal()"
+                    type="button"
+                  >
+                    <span nz-icon nzType="share-alt" nzTheme="outline"></span>
+                  </button>
+                }
+              </div>
+            </div>
+  
+            <div class="diagrama__field diagrama__field--mecanismo">
+              <span class="diagrama__field-label">Mecanismo de denominación *</span>
+              <div class="diagrama__select-with-icon">
+                <nz-select
+                  formControlName="mecanismoDenominacion"
+                  nzPlaceHolder="Selecciona mecanismo"
+                  nzAllowClear
+                  class="diagrama__select-flex"
+                >
+                  @for (option of mecanismosDenominacionOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+                @if (showMecanismoConfigIcon()) {
+                  <button
+                    nz-button
+                    nzType="text"
+                    nz-tooltip
+                    [nzTooltipTitle]="
+                      isMecanismoConfigDisabled()
+                        ? 'Mecanismo no configurable'
+                        : 'Configurar mecanismo'
+                    "
+                    nzTooltipPlacement="bottom"
+                    [disabled]="isMecanismoConfigDisabled()"
+                    (click)="onAbrirMecanismoConfigModal()"
+                    type="button"
+                  >
+                    <span nz-icon nzType="setting" nzTheme="outline"></span>
+                  </button>
+                }
+              </div>
+            </div>
+  
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Observaciones</span>
+              <textarea
+                nz-input
+                rows="4"
+                formControlName="observaciones"
+                placeholder="Detalle adicional del proceso"
+              ></textarea>
+            </div>
+          </div>
+  
+          <div class="diagrama__check-grid">
+            <label nz-checkbox formControlName="creaExpedienteElectronico">
+              Crea expediente electronico
+            </label>
+  
+            <label nz-checkbox formControlName="publicaEnCatalogo">
+              Publica en catalogo
+            </label>
+            @if (mostrarCatalogosPublicacion()) {
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Catalogos de publicación *</span>
+              <nz-select
+                formControlName="catalogosPublicacion"
+                nzMode="multiple"
+                nzPlaceHolder="Selecciona catalogos"
+                nzAllowClear
+              >
+                @for (option of catalogosPublicacionOptions(); track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                }
+              </nz-select>
+            </div>
+          }
+  
+            <label nz-checkbox formControlName="aplicaJornadaLaboral">
+              Aplica jornada laboral a ejecución
+            </label>
+
+            @if (mostrarJornadaCalendario()) {
+            <div class="diagrama__jornada-grid">
+              <div class="diagrama__field">
+                <span class="diagrama__field-label">Jornada *</span>
+                <nz-select
+                  formControlName="jornada"
+                  nzPlaceHolder="Selecciona jornada"
+                  nzAllowClear
+                >
+                  @for (option of jornadaOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+
+              <div class="diagrama__field">
+                <span class="diagrama__field-label">Calendario *</span>
+                <nz-select
+                  formControlName="calendario"
+                  nzPlaceHolder="Selecciona calendario"
+                  nzAllowClear
+                >
+                  @for (option of calendarioOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+            </div>
+          }
+          </div>          
+  
+          <div class="diagrama__formularios-proceso">
+            <span class="diagrama__field-label">Formularios de proceso</span>
+            <button
+              nz-button
+              nzType="default"
+              nz-tooltip
+              nzTooltipTitle="Gestionar formularios de proceso"
+              (click)="abrirCrudFormularios()"
+              type="button"
+            >
+              <nz-icon nzType="setting" nzTheme="outline" />
+              Gestionar formularios ({{ formulariosProceso().length }})
+            </button>
+          </div>
+
+          <div class="diagrama__associated-diagram">
+            <span class="diagrama__field-label">Diagrama asociado *</span>
+            <button
+              nz-button
+              nzType="default"
+              nz-tooltip
+              nzTooltipTitle="Abrir diagrama asociado"
+              (click)="onAbrirDiagramaAsociadoModal()"
+              type="button"
+            >
+              <nz-icon nzType="fork" nzTheme="outline" />
+              Abrir diagrama asociado
+            </button>
+            @if (procesoDiagramTouched()) {
+              <span class="diagrama__diagram-edited">Diagrama modificado en esta sesión</span>
+            }
+          </div>
+        </form>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="procesoDiagramModalVisible()"
+      nzTitle="Diagrama asociado"
+      [nzWidth]="isDesktop() ? 1100 : 'calc(100vw - 32px)'"
+      nzClassName="diagrama-modal"
+      [nzMaskClosable]="false"
+      (nzOnCancel)="onCerrarDiagramaAsociadoModal()"
+      [nzFooter]="diagramaAsociadoFooter"
+    >
+      <ng-container  *nzModalContent>
+        @if (validacionDiagrama().length > 0) {
+          <nz-alert
+            [nzType]="tieneErroresValidacionDiagrama() ? 'error' : 'warning'"
+            nzShowIcon
+            class="diagrama__alert"
+            nzMessage="Resultado de la validación del diagrama"
+            [nzDescription]="tplValidacionDiagrama"
+            [nzCloseable]="true"
+            (nzOnClose)="validacionDiagrama.set([])"
+          >
+          </nz-alert>
+          <ng-template #tplValidacionDiagrama>
+            <ul class="diagrama__validation-list">
+              @for (resultado of validacionDiagrama(); track $index) {
+                <li>
+                  {{ resultado.nivel === 'error' ? 'Error:' : 'Advertencia:' }}
+                  {{ resultado.mensaje }}
+                </li>
+              }
+            </ul>
+          </ng-template>
+        }
+        @if (isDesktop()) {
+          <app-bpmn-base-preview
+            #procesoDiagramaPreview
+            class="diagrama__bpmn-preview"
+            [legacyXml]="procesoEditSourceXml()"
+            [editable]="true"
+            (diagramEdited)="onProcesoModalDiagramEdited()"
+            (elementActivated)="onDiagramaElementoActivado($event)"
+          />
+        } @else {
+          <span class="diagrama__mobile-info">Diagrama disponible solo en versión escritorio.</span>
+        }
+      </ng-container>
+    </nz-modal>
+
+    <ng-template #diagramaAsociadoFooter>
+      <button nz-button type="button" (click)="validarDiagramaAsociado()">
+        <span nz-icon nzType="check-square"></span>
+        Validar diagrama
+      </button>
+      <button nz-button nzType="primary" type="button" (click)="onCerrarDiagramaAsociadoModal()">
+        Listo
+      </button>
+    </ng-template>
+
+    <nz-modal
+      [nzVisible]="diagramaElementoModalVisible()"
+      [nzTitle]="diagramaElementoModalTitulo()"
+      [nzWidth]="isDesktop() ? 800 : 'calc(100vw - 32px)'"
+      nzClassName="diagrama-elemento-modal"
+      [nzMaskClosable]="false"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="onCerrarDiagramaElementoModal()"
+      (nzOnOk)="onConfirmarDiagramaElementoModal()"
+    >
+      <ng-container *nzModalContent>
+        @if (diagramaElementoSeleccionado()?.kind === 'tarea') {
+          @if (tareaValidacionError()) {
+            <nz-alert
+              class="diagrama__element-modal-alert"
+              nzType="warning"
+              [nzMessage]="tareaValidacionError()"
+              nzShowIcon
+            />
+          }
+          <form class="diagrama__tarea-form" [formGroup]="diagramaElementoForm">
+            <div class="diagrama__tarea-grid">
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Nombre *</span>
+                <input
+                  nz-input
+                  type="text"
+                  formControlName="nombre"
+                  placeholder="Nombre de la tarea"
+                />
+              </div>
+
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Duración *</span>
+                <div class="diagrama__duration-group">
+                  <input
+                    nz-input
+                    type="number"
+                    min="1"
+                    formControlName="duracionValor"
+                    placeholder="Valor"
+                  />
+                  <nz-select formControlName="duracionUnidad" nzPlaceHolder="Unidad">
+                    @for (unit of tareaDuracionUnidadOptions; track unit) {
+                      <nz-option [nzValue]="unit" [nzLabel]="unit" />
+                    }
+                  </nz-select>
+                </div>
+              </div>
+
+              <div class="diagrama__field">
+                <span class="diagrama__field-label">Cargo *</span>
+                <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear>
+                  @for (option of cargosOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+
+              <div class="diagrama__field">
+                <span class="diagrama__field-label">Usuarios</span>
+                <nz-select
+                  formControlName="usuarios"
+                  nzMode="multiple"
+                  nzPlaceHolder="Usuarios del cargo seleccionado"
+                  nzAllowClear
+                >
+                  @for (option of tareaUsuariosDisponibles(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Observaciones</span>
+                <textarea
+                  nz-input
+                  rows="2"
+                  formControlName="observaciones"
+                  placeholder="Observaciones de la tarea"
+                ></textarea>
+              </div>
+
+              <div class="diagrama__field diagrama__field--full">
+                <label nz-checkbox formControlName="ejecutaFuncionalidad">
+                  Ejecuta funcionalidad
+                </label>
+              </div>
+
+              @if (mostrarFuncionalidadTarea()) {
+                <div class="diagrama__field diagrama__field--full">
+                  <span class="diagrama__field-label">Funcionalidad *</span>
+                  <nz-select
+                    formControlName="funcionalidad"
+                    nzPlaceHolder="Selecciona funcionalidad"
+                    nzAllowClear
+                  >
+                    @for (option of tareaFuncionalidadOptions; track option.value) {
+                      <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                    }
+                  </nz-select>
+                </div>
+              }
+
+              @if (diagramaElementoForm.controls.funcionalidad.value === 'cmf') {
+                <div class="diagrama__field diagrama__field--full">
+                  <button
+                    nz-button
+                    nzType="default"
+                    type="button"
+                    nz-tooltip
+                    nzTooltipTitle="Seleccionar elementos requeridos"
+                    (click)="abrirSeleccionMetadatos()"
+                  >
+                    <span nz-icon nzType="file-search"></span>
+                    Seleccionar elementos requeridos
+                  </button>
+                </div>
+              }
+
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Tipo ejecución</span>
+                <nz-select formControlName="tipoEjecucion" nzPlaceHolder="Tipo ejecución">
+                  @for (option of tareaTipoEjecucionOptions; track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+            </div>
+
+            <nz-collapse class="diagrama__tarea-collapse">
+              <nz-collapse-panel nzHeader="Datos opcionales">
+                <div class="diagrama__tarea-grid">
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="dispositivoMovil">
+                      Dispositivo móvil
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="agenda">Agenda</label>
+                  </div>
+
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="ignorarValidacionCargo">
+                      Ignorar validación cargo
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="aplicarJornadaLaboral">
+                      Aplicar jornada laboral
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="agregarRegistrosExternos">
+                      Agregar registros externos
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="filtrarUsuariosPorMetadatos">
+                      Filtrar usuarios por metadatos
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="conservarVistosBuenos">
+                      Conservar vistos buenos
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="imprimirFormulario">
+                      Imprimir formulario
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="tareaWeb">Tarea web</label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="notificarViaEmail">
+                      Notificar vía email
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="alertas">Alertas</label>
+                  </div>
+
+                  <div class="diagrama__field">
+                    <label nz-checkbox formControlName="checkpoint">Checkpoint</label>
+                  </div>
+
+                  @if (mostrarJornadaCalendarioTarea()) {
+                    <div class="diagrama__field">
+                      <span class="diagrama__field-label">Jornada *</span>
+                      <nz-select
+                        formControlName="jornada"
+                        nzPlaceHolder="Selecciona jornada"
+                        nzAllowClear
+                      >
+                        @for (option of jornadaOptions(); track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+
+                    <div class="diagrama__field">
+                      <span class="diagrama__field-label">Calendario *</span>
+                      <nz-select
+                        formControlName="calendario"
+                        nzPlaceHolder="Selecciona calendario"
+                        nzAllowClear
+                      >
+                        @for (option of calendarioOptions(); track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+                  }
+                </div>
+              </nz-collapse-panel>
+            </nz-collapse>
+          </form>
+        } @else if (diagramaElementoSeleccionado()?.kind === 'mensaje') {
+          <div class="diagrama__element-modal-field">
+            <span class="diagrama__field-label">Nombre</span>
+            <input
+              nz-input
+              type="text"
+              placeholder="Nombre del elemento"
+              [ngModel]="diagramaElementoNombreInput()"
+              (ngModelChange)="diagramaElementoNombreInput.set($event)"
+            />
+          </div>
+          <form class="diagrama__tarea-form" [formGroup]="mensajeElementoForm">
+            @if (mensajeValidacionError()) {
+              <nz-alert nzType="warning" [nzMessage]="mensajeValidacionError()" nzShowIcon />
+            }
+
+            <div class="diagrama__mensaje-row">
+              <span class="diagrama__field-label diagrama__mensaje-row-label">Para:</span>
+              <span class="diagrama__mensaje-summary">{{ mensajeResumenDestinatarios('para') }}</span>
+              <button
+                nz-button
+                nzSize="small"
+                type="button"
+                (click)="abrirSubModalDestinatarios('para')"
+              >
+                Editar
+              </button>
+            </div>
+
+            <div class="diagrama__mensaje-row">
+              <span class="diagrama__field-label diagrama__mensaje-row-label">Cc:</span>
+              <span class="diagrama__mensaje-summary">{{ mensajeResumenDestinatarios('cc') }}</span>
+              <button
+                nz-button
+                nzSize="small"
+                type="button"
+                (click)="abrirSubModalDestinatarios('cc')"
+              >
+                Editar
+              </button>
+            </div>
+
+            <div class="diagrama__field diagrama__field--full">
+              <label nz-checkbox formControlName="enviarACargo">
+                Enviar a usuarios del cargo
+              </label>
+            </div>
+
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Encabezado</span>
+              <label nz-checkbox formControlName="encabezadoInfoProceso">
+                Agregar información del proceso
+              </label>
+            </div>
+
+            <div class="diagrama__field diagrama__field--full">
+              <div class="diagrama__field-label-row">
+                <span class="diagrama__field-label">Asunto *</span>
+                <button
+                  nz-button
+                  nzType="text"
+                  type="button"
+                  nz-tooltip
+                  nzTooltipTitle="Editar con referencias"
+                  (click)="abrirSubModalAsunto()"
+                >
+                  <nz-icon nzType="edit" nzTheme="outline" />
+                </button>
+              </div>
+              <input nz-input type="text" formControlName="asunto" placeholder="Asunto" />
+            </div>
+
+            <div class="diagrama__field diagrama__field--full">
+              <div class="diagrama__field-label-row">
+                <span class="diagrama__field-label">Contenido *</span>
+                <button
+                  nz-button
+                  nzType="text"
+                  type="button"
+                  nz-tooltip
+                  nzTooltipTitle="Editar contenido"
+                  (click)="abrirSubModalContenido()"
+                >
+                  <nz-icon nzType="file-text" nzTheme="outline" />
+                </button>
+              </div>
+              <quill-editor
+                class="diagrama__mensaje-editor-inline"
+                formControlName="contenido"
+                [modules]="quillModules"
+                style="height: 200px"
+                (editorCreated)="onQuillEditorCreated($event)"
+              />
+            </div>
+
+            <div class="diagrama__field diagrama__field--full" style="margin-top: 50px;">
+              <span class="diagrama__field-label">Adjuntar PDF</span>
+              <nz-select
+                formControlName="adjuntarPdfIds"
+                nzMode="multiple"
+                nzPlaceHolder="Documentos del proceso"
+                nzAllowClear
+              >
+                @for (option of documentosOptions(); track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                }
+              </nz-select>
+            </div>
+
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Completar formulario</span>
+              <nz-radio-group formControlName="completarFormulario">
+                @for (option of mensajeCompletarFormularioOptions; track option.value) {
+                  <label nz-radio [nzValue]="option.value">{{ option.label }}</label>
+                }
+              </nz-radio-group>
+              @if (mostrarMensajeFormularioProceso()) {
+                <button nz-button type="button" (click)="abrirSubModalFormulario()">
+                  <nz-icon nzType="form" nzTheme="outline" />
+                  Configurar formulario de proceso ({{ mensajeFormularioRows().length }})
+                </button>
+              }
+            </div>
+          </form>
+        } @else if (diagramaElementoSeleccionado()?.kind === 'timer') {
+          @if (timerValidacionError()) {
+            <nz-alert
+              class="diagrama__element-modal-alert"
+              nzType="warning"
+              [nzMessage]="timerValidacionError()"
+              nzShowIcon
+            />
+          }
+          <div class="diagrama__element-modal-field">
+            <span class="diagrama__field-label">Nombre</span>
+            <input
+              nz-input
+              type="text"
+              placeholder="Nombre del elemento"
+              [ngModel]="diagramaElementoNombreInput()"
+              (ngModelChange)="diagramaElementoNombreInput.set($event)"
+            />
+          </div>
+          <form class="diagrama__tarea-form" [formGroup]="timerElementoForm">
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Modo de configuración *</span>
+              <nz-radio-group formControlName="modo">
+                <label nz-radio nzValue="datoFijo">Dato fijo</label>
+                <label nz-radio nzValue="metadatoFormulario">Metadato formulario</label>
+              </nz-radio-group>
+            </div>
+
+            @if (timerElementoForm.controls.modo.value === 'datoFijo') {
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Tipo *</span>
+                <nz-radio-group formControlName="datoFijoTipo">
+                  <label nz-radio nzValue="tiempo">Tiempo</label>
+                  <label nz-radio nzValue="fecha">Fecha</label>
+                </nz-radio-group>
+              </div>
+
+              @if (timerElementoForm.controls.datoFijoTipo.value === 'tiempo') {
+                <div class="diagrama__field diagrama__field--full">
+                  <span class="diagrama__field-label">Duración *</span>
+                  <div class="diagrama__duration-group">
+                    <input
+                      nz-input
+                      type="number"
+                      min="1"
+                      formControlName="duracionValor"
+                      placeholder="Valor"
+                    />
+                    <nz-select formControlName="duracionUnidad" nzPlaceHolder="Unidad">
+                      @for (unit of timerDuracionUnidadOptions; track unit) {
+                        <nz-option [nzValue]="unit" [nzLabel]="unit" />
+                      }
+                    </nz-select>
+                  </div>
+                </div>
+              } @else {
+                <div class="diagrama__field diagrama__field--full">
+                  <span class="diagrama__field-label">Fecha y hora</span>
+                  <div class="diagrama__duration-group">
+                    <nz-date-picker
+                      formControlName="fecha"
+                      nzFormat="dd/MM/yyyy"
+                      nzPlaceHolder="Fecha *"
+                    ></nz-date-picker>
+                    <nz-time-picker
+                      formControlName="hora"
+                      nzFormat="HH:mm"
+                      nzPlaceHolder="Hora (opcional)"
+                      [nzAllowEmpty]="true"
+                    ></nz-time-picker>
+                  </div>
+                </div>
+              }
+            } @else {
+              <div class="diagrama__config-subrow">
+                <nz-select
+                  formControlName="idDocumento"
+                  nzPlaceHolder="Documento *"
+                  nzAllowClear
+                >
+                  @for (doc of documentosOptions(); track doc.value) {
+                    <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                  }
+                </nz-select>
+                <nz-select
+                  formControlName="idMetadato"
+                  nzPlaceHolder="Metadato (solo fecha) *"
+                  nzAllowClear
+                  [nzDisabled]="
+                    timerElementoForm.controls.idDocumento.value === null ||
+                    timerElementoForm.controls.idDocumento.value === ''
+                  "
+                >
+                  @for (option of timerMetadatosOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+            }
+          </form>
+        } @else if (diagramaElementoSeleccionado()?.kind === 'decision') {
+          @if (decisionValidacionError()) {
+            <nz-alert
+              class="diagrama__element-modal-alert"
+              nzType="warning"
+              [nzMessage]="decisionValidacionError()"
+              nzShowIcon
+            />
+          }
+          <form class="diagrama__tarea-form" [formGroup]="decisionElementoForm">
+            <div class="diagrama__tarea-grid">
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Nombre *</span>
+                <input
+                  nz-input
+                  type="text"
+                  formControlName="nombre"
+                  placeholder="Nombre de la decisión"
+                />
+              </div>
+
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Duración *</span>
+                <div class="diagrama__duration-group">
+                  <input
+                    nz-input
+                    type="number"
+                    min="1"
+                    formControlName="duracionValor"
+                    placeholder="Valor"
+                  />
+                  <nz-select formControlName="duracionUnidad" nzPlaceHolder="Unidad">
+                    @for (unit of decisionDuracionUnidadOptions; track unit) {
+                      <nz-option [nzValue]="unit" [nzLabel]="unit" />
+                    }
+                  </nz-select>
+                </div>
+              </div>
+
+              <div class="diagrama__field">
+                <span class="diagrama__field-label">Cargo *</span>
+                <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear>
+                  @for (option of cargosOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+
+              <div class="diagrama__field">
+                <span class="diagrama__field-label">Usuarios</span>
+                <nz-select
+                  formControlName="usuarios"
+                  nzMode="multiple"
+                  nzPlaceHolder="Usuarios del cargo seleccionado"
+                  nzAllowClear
+                >
+                  @for (option of decisionUsuariosDisponibles(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Tipo de ejecución *</span>
+                <nz-select formControlName="tipoEjecucion" nzPlaceHolder="Selecciona tipo">
+                  @for (option of decisionTipoEjecucionOptions; track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+              </div>
+
+              <div class="diagrama__field diagrama__field--full">
+                <label nz-checkbox formControlName="ejecutaFuncionalidad">
+                  Ejecuta funcionalidad
+                </label>
+              </div>
+
+              @if (decisionElementoForm.controls.ejecutaFuncionalidad.value) {
+                <div class="diagrama__field diagrama__field--full">
+                  <span class="diagrama__field-label">Funcionalidad *</span>
+                  <nz-select formControlName="funcionalidad" nzPlaceHolder="Selecciona funcionalidad">
+                    @for (option of decisionFuncionalidadOptions; track option.value) {
+                      <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                    }
+                  </nz-select>
+                </div>
+              }
+
+              @if (
+                decisionElementoForm.controls.ejecutaFuncionalidad.value &&
+                decisionElementoForm.controls.funcionalidad.value === 'freg'
+              ) {
+                <div class="diagrama__field diagrama__field--full">
+                  <span class="diagrama__field-label">Documento *</span>
+                  <nz-select
+                    formControlName="documento"
+                    nzPlaceHolder="Selecciona documento"
+                    nzAllowClear
+                  >
+                    @for (doc of documentosOptions(); track doc.value) {
+                      <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                    }
+                  </nz-select>
+                </div>
+
+                <div class="diagrama__field diagrama__field--full">
+                  <label nz-checkbox formControlName="activarMetadatosSistema">
+                    Activar metadatos sistema
+                  </label>
+                </div>
+              }
+            </div>
+
+            <nz-collapse>
+              <nz-collapse-panel nzHeader="Datos opcionales" [nzActive]="false">
+                <div class="diagrama__tarea-grid">
+                  <div class="diagrama__field diagrama__field--full">
+                    <label nz-checkbox formControlName="aplicarJornadaLaboral">
+                      Aplicar jornada laboral
+                    </label>
+                  </div>
+
+                  @if (decisionElementoForm.controls.aplicarJornadaLaboral.value) {
+                    <div class="diagrama__field">
+                      <span class="diagrama__field-label">Jornada *</span>
+                      <nz-select
+                        formControlName="jornada"
+                        nzPlaceHolder="Selecciona jornada"
+                        nzAllowClear
+                      >
+                        @for (option of jornadaOptions(); track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+
+                    <div class="diagrama__field">
+                      <span class="diagrama__field-label">Calendario *</span>
+                      <nz-select
+                        formControlName="calendario"
+                        nzPlaceHolder="Selecciona calendario"
+                        nzAllowClear
+                      >
+                        @for (option of calendarioOptions(); track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+                  }
+
+                  <div class="diagrama__field diagrama__field--full">
+                    <label nz-checkbox formControlName="dispositivoMovil">
+                      Dispositivo móvil
+                    </label>
+                  </div>
+
+                  <div class="diagrama__field diagrama__field--full">
+                    <label nz-checkbox formControlName="alertas">Alertas</label>
+                  </div>
+
+                  @if (decisionElementoForm.controls.alertas.value) {
+                    <div class="diagrama__field diagrama__field--full">
+                      <span class="diagrama__field-label">Tipo de alerta *</span>
+                      <nz-select
+                        formControlName="alertaSeleccionada"
+                        nzPlaceHolder="Selecciona alerta"
+                        nzAllowClear
+                      >
+                        @for (option of decisionAlertasOptions; track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+                  }
+
+                  <div class="diagrama__field diagrama__field--full">
+                    <label nz-checkbox formControlName="notificarViaEmail">
+                      Notificar vía email
+                    </label>
+                  </div>
+                </div>
+              </nz-collapse-panel>
+            </nz-collapse>
+          </form>
+        } @else if (diagramaElementoSeleccionado()?.kind === 'transicion') {
+          @if (transicionConexionTexto()) {
+            <div class="diagrama__transicion-conexion">
+              <span nz-icon nzType="apartment" nzTheme="outline"></span>
+              <span><strong>Conexión:</strong> {{ transicionConexionTexto() }}</span>
+            </div>
+          }
+          <div class="diagrama__element-modal-field">
+            <span class="diagrama__field-label">Nombre</span>
+            <input
+              nz-input
+              type="text"
+              placeholder="Nombre de la transición"
+              [ngModel]="diagramaElementoNombreInput()"
+              (ngModelChange)="diagramaElementoNombreInput.set($event)"
+            />
+          </div>
+          <form class="diagrama__tarea-form" [formGroup]="transicionElementoForm">
+            @if (transicionValidacionError()) {
+              <nz-alert nzType="warning" [nzMessage]="transicionValidacionError()" nzShowIcon />
+            }
+
+            @if (transicionFlags().requiereTimer) {
+              <label nz-checkbox formControlName="requiereTimer">Requiere timer</label>
+
+              @if (transicionElementoForm.controls.requiereTimer.value) {
+                <div class="diagrama__field diagrama__field--full" formGroupName="timer">
+                  <span class="diagrama__field-label">Modo de configuración *</span>
+                  <nz-radio-group formControlName="modo">
+                    <label nz-radio nzValue="datoFijo">Dato fijo</label>
+                    <label nz-radio nzValue="metadatoFormulario">Metadato formulario</label>
+                  </nz-radio-group>
+
+                  @if (transicionElementoForm.controls.timer.controls.modo.value === 'datoFijo') {
+                    <div class="diagrama__field diagrama__field--full">
+                      <span class="diagrama__field-label">Tipo *</span>
+                      <nz-radio-group formControlName="datoFijoTipo">
+                        <label nz-radio nzValue="tiempo">Tiempo</label>
+                        <label nz-radio nzValue="fecha">Fecha</label>
+                      </nz-radio-group>
+                    </div>
+
+                    @if (
+                      transicionElementoForm.controls.timer.controls.datoFijoTipo.value === 'tiempo'
+                    ) {
+                      <div class="diagrama__field diagrama__field--full">
+                        <span class="diagrama__field-label">Duración *</span>
+                        <div class="diagrama__duration-group">
+                          <input
+                            nz-input
+                            type="number"
+                            min="1"
+                            formControlName="duracionValor"
+                            placeholder="Valor"
+                          />
+                          <nz-select formControlName="duracionUnidad" nzPlaceHolder="Unidad">
+                            @for (unit of transicionDuracionUnidadOptions; track unit) {
+                              <nz-option [nzValue]="unit" [nzLabel]="unit" />
+                            }
+                          </nz-select>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="diagrama__field diagrama__field--full">
+                        <span class="diagrama__field-label">Fecha y hora</span>
+                        <div class="diagrama__duration-group">
+                          <nz-date-picker
+                            formControlName="fecha"
+                            nzFormat="dd/MM/yyyy"
+                            nzPlaceHolder="Fecha *"
+                          ></nz-date-picker>
+                          <nz-time-picker
+                            formControlName="hora"
+                            nzFormat="HH:mm"
+                            nzPlaceHolder="Hora (opcional)"
+                            [nzAllowEmpty]="true"
+                          ></nz-time-picker>
+                        </div>
+                      </div>
+                    }
+                  } @else {
+                    <div class="diagrama__config-subrow">
+                      <nz-select
+                        formControlName="idDocumento"
+                        nzPlaceHolder="Documento *"
+                        nzAllowClear
+                      >
+                        @for (doc of documentosOptions(); track doc.value) {
+                          <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                        }
+                      </nz-select>
+                      <nz-select
+                        formControlName="idMetadato"
+                        nzPlaceHolder="Metadato (solo fecha) *"
+                        nzAllowClear
+                        [nzDisabled]="
+                          transicionElementoForm.controls.timer.controls.idDocumento.value ===
+                            null ||
+                          transicionElementoForm.controls.timer.controls.idDocumento.value === ''
+                        "
+                      >
+                        @for (option of transicionTimerMetadatosOptions(); track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+                  }
+                </div>
+
+                @if (transicionFlags().interrupcion) {
+                  <div class="diagrama__field diagrama__field--full">
+                    <span class="diagrama__field-label">Interrupción</span>
+                    <nz-radio-group formControlName="interrupcion">
+                      <label nz-radio [nzValue]="false">Sin interrupción</label>
+                      <label nz-radio [nzValue]="true">Con interrupción</label>
+                    </nz-radio-group>
+                  </div>
+                }
+              }
+            }
+
+            @if (transicionFlags().accion) {
+              <label nz-checkbox formControlName="accionRequerida">Requiere acción</label>
+
+              @if (transicionElementoForm.controls.accionRequerida.value) {
+                <div class="diagrama__field diagrama__field--full">
+                  <span class="diagrama__field-label">Acción *</span>
+                  <nz-select formControlName="accion" nzPlaceHolder="Selecciona acción" nzAllowClear>
+                    @for (option of transicionAccionOptions; track option.value) {
+                      <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                    }
+                  </nz-select>
+                </div>
+              }
+            }
+
+            @if (transicionFlags().reglasUsuario) {
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Reglas de usuario</span>
+                @for (
+                  regla of transicionElementoForm.controls.reglasUsuario.controls;
+                  track $index;
+                  let i = $index
+                ) {
+                  <div class="diagrama__transicion-regla" [formGroup]="regla">
+                    <div class="diagrama__transicion-regla-col">
+                      <nz-select
+                        formControlName="idDocumento"
+                        nzPlaceHolder="Documento"
+                        nzAllowClear
+                      >
+                        @for (doc of documentosOptions(); track doc.value) {
+                          <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                        }
+                      </nz-select>
+                      <nz-select
+                        formControlName="idMetadato"
+                        nzPlaceHolder="Metadato"
+                        nzAllowClear
+                        [nzDisabled]="regla.controls.idDocumento.value === ''"
+                      >
+                        @for (
+                          option of metadatosDeDocumento(regla.controls.idDocumento.value);
+                          track option.value
+                        ) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+
+                      @if(  transicionInterpretacionHabilitada(regla)){
+                        <nz-radio-group
+                          formControlName="interpretacion"
+                          nz-tooltip
+                          nzTooltipTitle="Solo disponible para metadatos tipo CBX"
+                        >
+                          <label nz-radio nzValue="id">id</label>
+                          <label nz-radio nzValue="texto">texto</label>
+                        </nz-radio-group>
+                      }
+                    </div>
+                    <div class="diagrama__transicion-regla-col">
+                      <nz-select
+                        formControlName="idCargo"
+                        nzPlaceHolder="Cargo"
+                        nzAllowClear
+                      >
+                        @for (cargo of transicionCargosReqRolOptions(); track cargo.value) {
+                          <nz-option [nzValue]="cargo.value" [nzLabel]="cargo.label" />
+                        }
+                      </nz-select>
+                      <nz-select
+                        formControlName="idMetadatoValor"
+                        nzPlaceHolder="Metadato"
+                        nzAllowClear
+                        [nzDisabled]="regla.controls.idCargo.value === ''"
+                      >
+                        @for (
+                          option of transicionMetadatosReqRolDeFila(regla);
+                          track option.value
+                        ) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+                    <button
+                      nz-button
+                      nzType="text"
+                      nzDanger
+                      type="button"
+                      nz-tooltip
+                      nzTooltipTitle="Quitar regla"
+                      (click)="quitarTransicionReglaUsuario(i)"
+                    >
+                      <nz-icon nzType="delete" nzTheme="outline" />
+                    </button>
+                  </div>
+                } @empty {
+                  <p class="diagrama__mensaje-empty-hint">Sin reglas de usuario configuradas.</p>
+                }
+                <button
+                  nz-button
+                  nzBlock
+                  nzType="dashed"
+                  type="button"
+                  (click)="agregarTransicionReglaUsuario()"
+                >
+                  + Agregar regla de usuario
+                </button>
+              </div>
+            }
+
+            @if (transicionFlags().reglasNegocio) {
+              <div class="diagrama__field diagrama__field--full">
+                <span class="diagrama__field-label">Reglas de negocio</span>
+                @for (
+                  regla of transicionElementoForm.controls.reglasNegocio.controls;
+                  track $index;
+                  let i = $index
+                ) {
+                  <div class="diagrama__transicion-regla-negocio" [formGroup]="regla">
+                    <div class="diagrama__transicion-regla-col">
+                      <nz-select
+                        formControlName="idDocumento"
+                        nzPlaceHolder="Documento"
+                        nzAllowClear
+                      >
+                        @for (doc of documentosOptions(); track doc.value) {
+                          <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                        }
+                      </nz-select>
+                      <nz-select
+                        formControlName="idMetadato"
+                        nzPlaceHolder="Metadato"
+                        nzAllowClear
+                        [nzDisabled]="regla.controls.idDocumento.value === ''"
+                      >
+                        @for (
+                          option of metadatosDeDocumento(regla.controls.idDocumento.value);
+                          track option.value
+                        ) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                    </div>
+                    <div class="diagrama__transicion-regla-col diagrama__transicion-regla-col--operador">
+                      <nz-select formControlName="operador" nzPlaceHolder="Operador" nzAllowClear>
+                        @for (option of transicionOperadoresDeFila(regla); track option.value) {
+                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                        }
+                      </nz-select>
+                      <nz-radio-group formControlName="fuenteValor">
+                        <label nz-radio nzValue="valor">valor</label>
+                        <label nz-radio nzValue="otroMetadato">otro metadato</label>
+                      </nz-radio-group>
+                    </div>
+                    <div class="diagrama__transicion-regla-col">
+                      @if (regla.controls.fuenteValor.value === 'valor') {
+                        <input
+                          nz-input
+                          type="text"
+                          formControlName="valorTexto"
+                          placeholder="Valor"
+                        />
+                      } @else {
+                        <nz-select
+                          formControlName="idDocumentoValor"
+                          nzPlaceHolder="Documento valor"
+                          nzAllowClear
+                        >
+                          @for (doc of documentosOptions(); track doc.value) {
+                            <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                          }
+                        </nz-select>
+                        <nz-select
+                          formControlName="idMetadatoValor"
+                          nzPlaceHolder="Metadato valor"
+                          nzAllowClear
+                          [nzDisabled]="regla.controls.idDocumentoValor.value === ''"
+                        >
+                          @for (
+                            option of metadatosDeDocumento(regla.controls.idDocumentoValor.value);
+                            track option.value
+                          ) {
+                            <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                          }
+                        </nz-select>
+                      }
+                    </div>
+                    <button
+                      nz-button
+                      nzType="text"
+                      nzDanger
+                      type="button"
+                      nz-tooltip
+                      nzTooltipTitle="Quitar regla"
+                      (click)="quitarTransicionReglaNegocio(i)"
+                    >
+                      <nz-icon nzType="delete" nzTheme="outline" />
+                    </button>
+                  </div>
+                } @empty {
+                  <p class="diagrama__mensaje-empty-hint">Sin reglas de negocio configuradas.</p>
+                }
+                <button
+                  nz-button
+                  nzBlock
+                  nzType="dashed"
+                  type="button"
+                  (click)="agregarTransicionReglaNegocio()"
+                >
+                  + Agregar regla de negocio
+                </button>
+              </div>
+            }
+          </form>
+        } @else {
+          <div class="diagrama__element-modal-field">
+            <span class="diagrama__field-label">Nombre</span>
+            <input
+              nz-input
+              type="text"
+              placeholder="Nombre del elemento"
+              [ngModel]="diagramaElementoNombreInput()"
+              (ngModelChange)="diagramaElementoNombreInput.set($event)"
+            />
+          </div>
+        }
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="mensajeSubModal() === 'destinatarios'"
+      [nzTitle]="'Destinatarios — ' + (mensajeSubModalTarget() === 'para' ? 'Para' : 'Cc')"
+      [nzWidth]="isDesktop() ? 560 : 'calc(100vw - 32px)'"
+      nzClassName="mensaje-submodal"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="cerrarMensajeSubModal()"
+      (nzOnOk)="cerrarMensajeSubModal()"
+    >
+      <ng-container *nzModalContent>
+        <div [formGroup]="mensajeElementoForm">
+          <div
+            class="diagrama__tarea-form"
+            [formGroupName]="
+              mensajeSubModalTarget() === 'para' ? 'destinatarios' : 'destinatariosCc'
+            "
+          >
+          <div class="diagrama__field">
+            <span class="diagrama__field-label">Usuario sistema</span>
+            <nz-select
+              formControlName="usuariosSistema"
+              nzMode="multiple"
+              nzPlaceHolder="Selecciona usuarios del sistema"
+              nzAllowClear
+            >
+              @for (option of usuariosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="diagrama__field">
+            <span class="diagrama__field-label">Usuarios externos</span>
+            <nz-select
+              formControlName="usuariosExternos"
+              nzMode="tags"
+              nzPlaceHolder="Ingresa correos y presiona Enter"
+            ></nz-select>
+            @if (mensajeExternosInvalidos().length > 0) {
+              <span class="diagrama__mensaje-error">
+                Correos inválidos: {{ mensajeExternosInvalidos().join(', ') }}
+              </span>
+            }
+          </div>
+
+          <div class="diagrama__field">
+            <span class="diagrama__field-label">Documento / Metadato</span>
+            @for (par of mensajeReferenciasDe(mensajeSubModalTarget()).controls; track $index; let i = $index) {
+              <div class="diagrama__mensaje-par-row" [formGroup]="par">
+                <nz-select
+                  formControlName="idDocumento"
+                  nzPlaceHolder="Documento"
+                  nzAllowClear
+                  class="diagrama__mensaje-par-doc"
+                >
+                  @for (option of documentosOptions(); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+                <nz-select
+                  formControlName="idMetadato"
+                  nzPlaceHolder="Metadato"
+                  nzAllowClear
+                  [nzDisabled]="par.controls.idDocumento.value === ''"
+                >
+                  @for (option of mensajeMetadatosDePar(mensajeSubModalTarget(), i); track option.value) {
+                    <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                  }
+                </nz-select>
+                <button
+                  nz-button
+                  nzType="text"
+                  nzDanger
+                  type="button"
+                  nz-tooltip
+                  nzTooltipTitle="Quitar combinación"
+                  (click)="quitarMensajeReferenciaPar(mensajeSubModalTarget(), i)"
+                >
+                  <nz-icon nzType="delete" nzTheme="outline" />
+                </button>
+              </div>
+              @if (mensajeParAvisoDgd(mensajeSubModalTarget(), i)) {
+                <div class="diagrama__mensaje-aviso-dgd">
+                  Los metadatos tipo DGD serán abordados en una futura iteración.
+                </div>
+              }
+            } @empty {
+              <p class="diagrama__mensaje-empty-hint">
+                Sin combinaciones. Agrega pares Documento + Metadato como destinatario.
+              </p>
+            }
+            <button
+              nz-button
+              nzBlock
+              nzType="dashed"
+              type="button"
+              (click)="agregarMensajeReferenciaPar(mensajeSubModalTarget())"
+            >
+              + Agregar combinación documento / metadato
+            </button>
+          </div>
+          </div>
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="mensajeSubModal() === 'asunto'"
+      nzTitle="Asunto del correo"
+      [nzWidth]="isDesktop() ? 620 : 'calc(100vw - 32px)'"
+      nzClassName="mensaje-submodal"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="cerrarMensajeSubModal()"
+      (nzOnOk)="cerrarMensajeSubModal()"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__mensaje-token-bar">
+          <nz-select
+            [ngModel]="mensajeTokenDocumentoSeleccionado()"
+            (ngModelChange)="onMensajeTokenDocumentoChange($event)"
+            nzPlaceHolder="Documento"
+            nzAllowClear
+            class="diagrama__mensaje-token-select"
+          >
+            @for (option of documentosOptions(); track option.value) {
+              <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+            }
+          </nz-select>
+          <nz-select
+            [ngModel]="mensajeTokenMetadatoSeleccionado()"
+            (ngModelChange)="mensajeTokenMetadatoSeleccionado.set($event)"
+            nzPlaceHolder="Metadato"
+            nzAllowClear
+            class="diagrama__mensaje-token-select"
+            [nzDisabled]="mensajeTokenDocumentoSeleccionado() === ''"
+          >
+            @for (option of mensajeMetadatosDelToken(); track option.value) {
+              <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+            }
+          </nz-select>
+          <button
+            nz-button
+            type="button"
+            [disabled]="
+              mensajeTokenDocumentoSeleccionado() === '' ||
+              mensajeTokenMetadatoSeleccionado() === '' ||
+              mensajeTokenMetaEsDgd()
+            "
+            (click)="insertarTokenReferenciaEnAsunto()"
+          >
+            Insertar referencia
+          </button>
+        </div>
+        @if (mensajeTokenMetaEsDgd()) {
+          <div class="diagrama__mensaje-aviso-dgd">
+            Los metadatos tipo DGD serán abordados en una futura iteración.
+          </div>
+        }
+        <textarea
+          #mensajeAsuntoTextarea
+          nz-input
+          rows="2"
+          placeholder="Asunto del correo"
+          [ngModel]="mensajeElementoForm.controls.asunto.value"
+          (ngModelChange)="mensajeElementoForm.controls.asunto.setValue($event)"
+        ></textarea>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="mensajeSubModal() === 'contenido'"
+      nzTitle="Contenido del correo"
+      [nzWidth]="isDesktop() ? 760 : 'calc(100vw - 32px)'"
+      nzClassName="mensaje-submodal mensaje-submodal--editor"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="cerrarMensajeSubModal()"
+      (nzOnOk)="cerrarMensajeSubModal()"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__mensaje-token-bar">
+          <nz-select
+            [ngModel]="mensajeTokenDocumentoSeleccionado()"
+            (ngModelChange)="onMensajeTokenDocumentoChange($event)"
+            nzPlaceHolder="Documento"
+            nzAllowClear
+            class="diagrama__mensaje-token-select"
+          >
+            @for (option of documentosOptions(); track option.value) {
+              <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+            }
+          </nz-select>
+          <nz-select
+            [ngModel]="mensajeTokenMetadatoSeleccionado()"
+            (ngModelChange)="mensajeTokenMetadatoSeleccionado.set($event)"
+            nzPlaceHolder="Metadato"
+            nzAllowClear
+            class="diagrama__mensaje-token-select"
+            [nzDisabled]="mensajeTokenDocumentoSeleccionado() === ''"
+          >
+            @for (option of mensajeMetadatosDelToken(); track option.value) {
+              <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+            }
+          </nz-select>
+          <button
+            nz-button
+            type="button"
+            [disabled]="
+              mensajeTokenDocumentoSeleccionado() === '' ||
+              mensajeTokenMetadatoSeleccionado() === '' ||
+              mensajeTokenMetaEsDgd()
+            "
+            (click)="insertarTokenReferenciaEnContenido()"
+          >
+            Insertar referencia
+          </button>
+        </div>
+        @if (mensajeTokenMetaEsDgd()) {
+          <div class="diagrama__mensaje-aviso-dgd">
+            Los metadatos tipo DGD serán abordados en una futura iteración.
+          </div>
+        }
+
+        <div [formGroup]="mensajeElementoForm" class="diagrama__mensaje-editor">
+          <quill-editor
+            formControlName="contenido"
+            [modules]="quillModules"
+            style="height: 260px"
+            (editorCreated)="onQuillEditorCreated($event)"
+          />
+        </div>
+
+        <div class="diagrama__mensaje-link-section">
+          <span class="diagrama__field-label">Enviar documentos como link</span>
+          <div class="diagrama__mensaje-token-bar">
+            <nz-select
+              [ngModel]="mensajeTokenLinkDocumentoSeleccionado()"
+              (ngModelChange)="mensajeTokenLinkDocumentoSeleccionado.set($event)"
+              nzPlaceHolder="Documento"
+              nzAllowClear
+              class="diagrama__mensaje-token-select"
+            >
+              @for (option of documentosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+            <button
+              nz-button
+              type="button"
+              [disabled]="mensajeTokenLinkDocumentoSeleccionado() === ''"
+              (click)="insertarTokenLinkEnContenido()"
+            >
+              Insertar link
+            </button>
+          </div>
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="mensajeSubModal() === 'formulario'"
+      nzTitle="Formulario de proceso"
+      [nzWidth]="isDesktop() ? 720 : 'calc(100vw - 32px)'"
+      nzClassName="mensaje-submodal"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="cerrarMensajeSubModal()"
+      (nzOnOk)="cerrarMensajeSubModal()"
+    >
+      <ng-container *nzModalContent>
+        @for (fila of mensajeFormularioRows(); track fila.uid; let i = $index) {
+          <div class="diagrama__mensaje-form-row" [formGroup]="fila.group">
+            <nz-select
+              formControlName="idDocumento"
+              nzPlaceHolder="Documento"
+              nzAllowClear
+              class="diagrama__mensaje-form-doc"
+            >
+              @for (option of documentosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+            <nz-select
+              formControlName="idsMetadatos"
+              nzMode="multiple"
+              nzPlaceHolder="Metadatos"
+              [nzDisabled]="fila.group.controls.idDocumento.value === ''"
+            >
+              @for (option of mensajeMetadatosDeFila(fila.uid); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+            <button
+              nz-button
+              nzType="text"
+              nzDanger
+              type="button"
+              nz-tooltip
+              nzTooltipTitle="Quitar fila"
+              (click)="quitarMensajeFormularioItem(i)"
+            >
+              <nz-icon nzType="delete" nzTheme="outline" />
+            </button>
+          </div>
+        } @empty {
+          <p class="diagrama__mensaje-empty-hint">
+            Sin filas configuradas. Agrega pares Documento + Metadatos.
+          </p>
+        }
+        <button nz-button nzBlock nzType="dashed" type="button" (click)="agregarMensajeFormularioItem()">
+          + Agregar formulario
+        </button>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="mecanismoConfigModalVisible()"
+      nzTitle="Configuración de Mecanismo"
+      [nzWidth]="isDesktop() ? 900 : 'calc(100vw - 32px)'"
+      nzClassName="mecanismo-config-modal"
+      [nzMaskClosable]="false"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="onCerrarMecanismoConfigModal()"
+      (nzOnOk)="onCerrarMecanismoConfigModal()"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__config-preview">
+          @for (
+            dato of selectedMecanismoForConfig()?.datos_requeridos;
+            track dato.id_dato_req_mecanismo;
+            let last = $last
+          ) {
+            <span>{{ resolveDatoLabel(dato) }}</span>
+            @if (!last) {
+              <span> </span>
+            }
+          }
+        </div>
+        <div class="diagrama__config-list">
+          @for (
+            dato of selectedMecanismoForConfig()?.datos_requeridos;
+            track dato.id_dato_req_mecanismo
+          ) {
+            @if (dato.id_dato_mecanismo === 'var') {
+              <div class="diagrama__config-row">
+                <span class="diagrama__config-label">
+                  {{ dato.id_dato_mecanismo }}: {{ dato.valor_por_defecto }}
+                </span>
+                <nz-select
+                  [ngModel]="configDatoSelections()[dato.id_dato_req_mecanismo]?.tipo"
+                  (ngModelChange)="
+                    updateConfigDato(dato.id_dato_req_mecanismo, { tipo: $event })
+                  "
+                  nzPlaceHolder="Selecciona tipo"
+                >
+                  <nz-option nzLabel="Nombre de proceso" nzValue="nombre_proceso" />
+                  <nz-option
+                    nzLabel="Metadato formulario de proceso"
+                    nzValue="metadato_formulario"
+                  />
+                  <nz-option nzLabel="Correlativo" nzValue="correlativo" />
+                  <nz-option nzLabel="Texto fijo" nzValue="texto_fijo" />
+                </nz-select>
+
+                @if (
+                  configDatoSelections()[dato.id_dato_req_mecanismo]?.tipo ===
+                  'metadato_formulario'
+                ) {
+                  <div class="diagrama__config-subrow">
+                    <nz-select
+                      [ngModel]="
+                        configDatoSelections()[dato.id_dato_req_mecanismo]?.documento
+                      "
+                      (ngModelChange)="
+                        onConfigDatoDocumentoChange(dato.id_dato_req_mecanismo, $event)
+                      "
+                      nzPlaceHolder="Documento"
+                    >
+                      @for (doc of documentosOptions(); track doc.value) {
+                        <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
+                      }
+                    </nz-select>
+                    <nz-select
+                      [ngModel]="compuestoConfigDatoMetadato(dato.id_dato_req_mecanismo)"
+                      (ngModelChange)="
+                        onConfigDatoMetadatoChange(dato.id_dato_req_mecanismo, $event)
+                      "
+                      nzPlaceHolder="Metadato"
+                    >
+                      @for (meta of metadatosOptions(); track meta.value) {
+                        <nz-option [nzValue]="meta.value" [nzLabel]="meta.label" />
+                      }
+                    </nz-select>
+                  </div>
+                }
+
+                @if (
+                  configDatoSelections()[dato.id_dato_req_mecanismo]?.tipo ===
+                  'texto_fijo'
+                ) {
+                  <input
+                    nz-input
+                    [ngModel]="configDatoSelections()[dato.id_dato_req_mecanismo]?.valor"
+                    (ngModelChange)="
+                      updateConfigDato(dato.id_dato_req_mecanismo, { valor: $event })
+                    "
+                    placeholder="Valor fijo"
+                  />
+                }
+              </div>
+            }
+          }
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzVisible]="compartirModalVisible()"
+      nzTitle="Compartir acceso"
+      [nzWidth]="isDesktop() ? 640 : 'calc(100vw - 32px)'"
+      nzClassName="compartir-acceso-modal"
+      [nzMaskClosable]="false"
+      nzOkText="Listo"
+      nzCancelText="Cancelar"
+      (nzOnCancel)="onCerrarCompartirModal()"
+      (nzOnOk)="onCerrarCompartirModal()"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__share-grid">
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Área</span>
+            <nz-select
+              nzMode="multiple"
+              [ngModel]="compartirGrupo()"
+              (ngModelChange)="compartirGrupo.set($event)"
+              nzPlaceHolder="Selecciona áreas"
+              nzAllowClear
+            >
+              @for (option of areasOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Cargo</span>
+            <nz-select
+              nzMode="multiple"
+              [ngModel]="compartirCargo()"
+              (ngModelChange)="compartirCargo.set($event)"
+              nzPlaceHolder="Selecciona cargos"
+              nzAllowClear
+            >
+              @for (option of cargosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Usuarios</span>
+            <nz-select
+              nzMode="multiple"
+              [ngModel]="compartirUsuario()"
+              (ngModelChange)="compartirUsuario.set($event)"
+              nzPlaceHolder="Selecciona usuarios"
+              nzAllowClear
+            >
+              @for (option of usuariosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      nzTitle="Selección de metadatos"
+      nzWidth="800px"
+      [nzVisible]="seleccionMetadatosModalAbierto()"
+      (nzOnCancel)="cerrarSeleccionMetadatos()"
+      [nzFooter]="seleccionMetadatosFooter"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__seleccion-metadatos">
+          <div class="diagrama__seccion-formularios-fila">
+            <section class="diagrama__seccion-formularios">
+              <div class="diagrama__seccion-cabecera">
+                <h4>Formularios de proceso</h4>
+                <button
+                  nz-button
+                  nzType="text"
+                  type="button"
+                  nz-tooltip
+                  nzTooltipTitle="Gestionar formularios de proceso"
+                  (click)="abrirCrudFormularios()"
+                >
+                  <span nz-icon nzType="setting"></span>
+                </button>
+              </div>
+              @if (formulariosProceso().length === 0) {
+                <p class="diagrama__mensaje-vacio">
+                  No hay formularios de procesos. Usa
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    (click)="abrirCrudFormularios()"
+                  >
+                    <span nz-icon nzType="setting"></span>
+                  </button>
+                  para crearlos.
+                </p>
+              } @else {
+                <nz-select
+                  class="diagrama__formulario-select"
+                  [ngModel]="formularioSeleccionadoId()"
+                  (ngModelChange)="seleccionarFormularioProceso($event)"
+                  nzPlaceHolder="Selecciona un formulario"
+                >
+                  @for (fila of formulariosProceso(); track fila.id) {
+                    <nz-option
+                      [nzValue]="fila.id"
+                      [nzLabel]="fila.nombre || 'Sin nombre'"
+                    >
+                      <span class="diagrama__formulario-nombre">{{ fila.nombre || 'Sin nombre' }}</span>
+                      <span class="diagrama__formulario-detalle">
+                        ({{ nombreDocumentoDeFormulario(fila) }})
+                      </span>
+                    </nz-option>
+                  }
+                </nz-select>
+              }
+            </section>
+            <section class="diagrama__seccion-traspasos">
+              <div class="diagrama__seccion-cabecera">
+                <h4>Configurar traspasos ({{ traspasosTrabajo().length }})</h4>
+                <button
+                  nz-button
+                  nzType="text"
+                  type="button"
+                  nz-tooltip
+                  nzTooltipTitle="Configuración de traspaso de información"
+                  [disabled]="formularioSeleccionadoId() === null"
+                  (click)="abrirConfigurarTraspasos()"
+                >
+                  <span nz-icon nzType="setting"></span>
+                </button>
+              </div>
+              @if (formularioSeleccionadoId() === null) {
+                <p class="diagrama__mensaje-vacio">
+                  Selecciona un formulario para configurar traspasos.
+                </p>
+              } @else {
+                <p class="diagrama__traspaso-resumen">
+                  Configura el traspaso de metadatos entre formularios.
+                </p>
+              }
+            </section>
+          </div>
+          <section class="diagrama__seccion-metadatos">
+            <div class="diagrama__seccion-cabecera">
+              <h4>
+                Metadatos del formulario
+                @if (formularioSeleccionadoId() !== null) {
+                  ({{ metadatosSeleccionadosTotal() }}/{{ metadatosTotal() }})
+                }
+              </h4>
+              @if (formularioSeleccionadoId() !== null) {
+                <label
+                  nz-checkbox
+                  class="diagrama__metadato-todos"
+                  [nzChecked]="metadatosSeleccionadosTotal() === metadatosTotal() && metadatosTotal() > 0"
+                  [nzIndeterminate]="metadatosSeleccionadosTotal() > 0 && metadatosSeleccionadosTotal() < metadatosTotal()"
+                  (nzCheckedChange)="seleccionarTodosMetadatos($event)"
+                >
+                  Seleccionar todos
+                </label>
+              }
+            </div>
+            @if (formularioSeleccionadoId() === null) {
+              <p class="diagrama__mensaje-vacio">
+                Selecciona un formulario para ver sus metadatos.
+              </p>
+            } @else {
+              <nz-collapse>
+                @for (grupo of metadatosFormularioPorBloque(); track grupo.bloque) {
+                  <nz-collapse-panel [nzHeader]="bloqueHeader" [nzActive]="false">
+                    <ng-template #bloqueHeader>
+                      <div class="diagrama__bloque-cabecera">
+                        <span class="diagrama__bloque-titulo">{{ grupo.bloque }}</span>
+                        <span class="diagrama__bloque-contador">
+                          {{ grupo.seleccionados }}/{{ grupo.total }}
+                        </span>
+                        <label
+                          nz-checkbox
+                          [nzChecked]="grupo.seleccionados === grupo.total && grupo.total > 0"
+                          [nzIndeterminate]="grupo.seleccionados > 0 && grupo.seleccionados < grupo.total"
+                          (nzCheckedChange)="seleccionarTodosMetadatosBloque(grupo.opciones, $event)"
+                        >
+                          Seleccionar bloque
+                        </label>
+                      </div>
+                    </ng-template>
+                    <div class="diagrama__metadato-lista">
+                      @for (opcion of grupo.opciones; track opcion.idMetadato) {
+                        <div class="diagrama__metadato-fila">
+                          <label
+                            nz-checkbox
+                            [nzChecked]="metadatoTrabajoSeleccionado(opcion)"
+                            (nzCheckedChange)="toggleMetadatoTrabajo(opcion)"
+                          >
+                            {{ nombreMetadato(opcion) }} | {{ opcion.tipo }}
+                          </label>
+                        </div>
+                      }
+                    </div>
+                  </nz-collapse-panel>
+                }
+              </nz-collapse>
+            }
+          </section>
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      nzTitle="Gestión de formularios de proceso"
+      nzWidth="860"
+      [nzVisible]="crudFormulariosModalAbierto()"
+      (nzOnCancel)="cerrarCrudFormularios()"
+      [nzFooter]="crudFormulariosFooter"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__crud-formularios">
+          <div class="diagrama__crud-cabecera">
+            <button nz-button nzType="primary" type="button" (click)="crearFilaFormularioProceso()">
+              Crear nuevo
+            </button>
+          </div>
+          @for (fila of formulariosProceso(); track fila.id) {
+            @if (filaFormularioEditandoId() === fila.id) {
+              <div class="diagrama__fila-formulario diagrama__fila-formulario--edicion">
+                <div class="diagrama__ff-nombre">
+                  <input
+                    nz-input
+                    type="text"
+                    placeholder="Nombre *"
+                    [ngModel]="fila.nombre"
+                    (ngModelChange)="actualizarFilaFormularioProceso(fila.id, { nombre: $event })"
+                  >
+                </div>
+                <div class="diagrama__ff-formulario">
+                  <nz-select
+                    [ngModel]="formularioSeleccionadoValor(fila)"
+                    (ngModelChange)="actualizarFormularioProcesoFila(fila.id, $event)"
+                    nzPlaceHolder="Selecciona documento"
+                    nzAllowClear
+                  >
+                    @for (option of documentosLivianoOptions(); track option.value) {
+                      <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                    }
+                  </nz-select>
+                </div>
+                <div class="diagrama__ff-visibilidad">
+                  <nz-radio-group
+                    [ngModel]="fila.visibilidad"
+                    (ngModelChange)="actualizarFilaFormularioProceso(fila.id, { visibilidad: $event })"
+                  >
+                    @for (option of tareaFormularioVisibilidadOptions; track option.value) {
+                      <label nz-radio [nzValue]="option.value">{{ option.label }}</label>
+                    }
+                  </nz-radio-group>
+                </div>
+                <button
+                  nz-button
+                  nzType="primary"
+                  type="button"
+                  [disabled]="fila.nombre === '' || fila.idFormulario === 0"
+                  (click)="guardarFilaFormularioProceso(fila.id)"
+                >
+                  Guardar
+                </button>
+                <button
+                  nz-button
+                  type="button"
+                  (click)="cancelarEdicionFilaFormularioProceso(fila.id)"
+                >
+                  Cancelar
+                </button>
+              </div>
+            } @else {
+              <div class="diagrama__fila-formulario">
+                <span class="diagrama__ff-nombre-nombre">{{ fila.nombre || 'Sin nombre' }}</span>
+                <span class="diagrama__ff-formulario">{{ nombreDocumentoDeFormulario(fila) }}</span>
+                <span class="diagrama__ff-visibilidad-texto">
+                  {{ fila.visibilidad === 'publico' ? 'Público' : 'Privado' }}
+                </span>
+                <button nz-button nzType="text" type="button" (click)="editarFilaFormularioProceso(fila.id)">
+                  Editar
+                </button>
+                <button
+                  nz-button
+                  nzType="text"
+                  nzDanger
+                  type="button"
+                  (click)="eliminarFilaFormularioProceso(fila.id)"
+                >
+                  Eliminar
+                </button>
+              </div>
+            }
+          } @empty {
+            <p class="diagrama__mensaje-vacio">
+              No hay formularios de proceso. Presiona "Crear nuevo".
+            </p>
+          }
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      nzTitle="Configuración de traspaso de información entre metadatos"
+      nzWidth="850px"
+      [nzVisible]="traspasosModalAbierto()"
+      (nzOnCancel)="cerrarConfigurarTraspasos()"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__traspasos">
+          <p class="diagrama__traspaso-descripcion">
+            Seleccione un metadato de origen y uno de destino luego agrega la configuración.
+          </p>
+
+          <div class="diagrama__traspaso-selector">
+            <div class="diagrama__traspaso-panel">
+              <h5>Origen</h5>
+              <nz-select
+                class="diagrama__traspaso-formulario-select"
+                [ngModel]="traspasoOrigenFormularioId()"
+                (ngModelChange)="traspasoSeleccionarOrigenFormulario($event)"
+                nzPlaceHolder="Selecciona formulario origen"
+                [nzDisabled]="traspasoFormulariosOrigen().length === 0"
+              >
+                @for (fila of traspasoFormulariosOrigen(); track fila.id) {
+                  <nz-option
+                    [nzValue]="fila.idFormulario"
+                    [nzLabel]="(fila.nombre || 'Sin nombre') + ' (' + nombreDocumentoDeFormulario(fila) + ')'"
+                  >
+                    <span class="diagrama__formulario-nombre">{{ fila.nombre || 'Sin nombre' }}</span>
+                    <span class="diagrama__formulario-detalle">
+                      ({{ nombreDocumentoDeFormulario(fila) }})
+                    </span>
+                  </nz-option>
+                }
+              </nz-select>
+              <input
+                nz-input
+                class="diagrama__traspaso-buscador"
+                type="text"
+                placeholder="Buscar metadato…"
+                [ngModel]="traspasoFiltroOrigen()"
+                (ngModelChange)="traspasoFiltroOrigen.set($event)"
+                [disabled]="traspasoOrigenFormularioId() === null"
+              >
+              <p class="diagrama__traspaso-contador">
+                Metadatos: {{ traspasoOrigenMetadatos().length }}
+              </p>
+              @if (traspasoOrigenFormularioId() === null || traspasoOrigenMetadatos().length === 0) {
+                <p class="diagrama__mensaje-vacio">
+                  @if (traspasoFormulariosOrigen().length === 0) {
+                    No hay otros formularios para usar como origen.
+                  } @else {
+                    Selecciona un formulario origen para ver sus metadatos.
+                  }
+                </p>
+              } @else {
+                <div class="diagrama__traspaso-tabla-contenedor">
+                  @if (traspasoOrigenMetadatosFiltrados().length === 0) {
+                    <p class="diagrama__mensaje-vacio">Sin resultados para la búsqueda.</p>
+                  } @else {
+                    <table class="diagrama__traspaso-tabla">
+                      <thead>
+                        <tr>
+                          <th>Bloque</th>
+                          <th>Metadato</th>
+                          <th>Tipo metadato</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (opcion of traspasoOrigenMetadatosFiltrados(); track opcion.value) {
+                          <tr
+                            [class.diagrama__traspaso-fila-seleccionada]="traspasoOrigenSeleccion() === opcion.value"
+                            (click)="traspasoSeleccionarOrigenMetadato(opcion)"
+                          >
+                            <td>{{ bloqueDisplay(opcion.nombreBloque, opcion.codigoBloque) }}</td>
+                            <td>{{ nombreMetadato(opcion) }}</td>
+                            <td>{{ opcion.tipo || '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="diagrama__traspaso-accion">
+              <button
+                nz-button
+                nzType="primary"
+                type="button"
+                [disabled]="!traspasoAgregarHabilitado()"
+                (click)="traspasoAgregar()"
+              >
+                <span nz-icon nzType="double-right"></span>
+                Agregar
+              </button>
+            </div>
+
+            <div class="diagrama__traspaso-panel">
+              <h5>Destino</h5>
+              <nz-select
+                class="diagrama__traspaso-formulario-select"
+                [ngModel]="formularioSeleccionadoId()"
+                [nzDisabled]="true"
+                nzPlaceHolder="Sin formulario seleccionado"
+              >
+                @if (formularioSeleccionadoFila(); as filaSeleccionada) {
+                  <nz-option
+                    [nzValue]="formularioSeleccionadoId()"
+                    [nzLabel]="(filaSeleccionada.nombre || 'Sin nombre') + ' (' + nombreDocumentoDeFormulario(filaSeleccionada) + ')'"
+                  />
+                }
+              </nz-select>
+              <input
+                nz-input
+                class="diagrama__traspaso-buscador"
+                type="text"
+                placeholder="Buscar metadato…"
+                [ngModel]="traspasoFiltroDestino()"
+                (ngModelChange)="traspasoFiltroDestino.set($event)"
+              >
+              <p class="diagrama__traspaso-contador">
+                Metadatos: {{ traspasoDestinoMetadatos().length }}
+              </p>
+              @if (traspasoDestinoMetadatos().length === 0) {
+                <p class="diagrama__mensaje-vacio">Sin metadatos para listar.</p>
+              } @else {
+                <div class="diagrama__traspaso-tabla-contenedor">
+                  @if (traspasoDestinoMetadatosFiltrados().length === 0) {
+                    <p class="diagrama__mensaje-vacio">Sin resultados para la búsqueda.</p>
+                  } @else {
+                    <table class="diagrama__traspaso-tabla">
+                      <thead>
+                        <tr>
+                          <th>Bloque</th>
+                          <th>Metadato</th>
+                          <th>Tipo metadato</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (opcion of traspasoDestinoMetadatosFiltrados(); track opcion.value) {
+                          <tr
+                            [class.diagrama__traspaso-fila-seleccionada]="traspasoDestinoSeleccion() === opcion.value"
+                            [class.diagrama__traspaso-fila-deshabilitada]="traspasoDestinoYaConfigurado(opcion)"
+                            (click)="traspasoSeleccionarDestinoMetadato(opcion)"
+                          >
+                            <td>{{ bloqueDisplay(opcion.nombreBloque, opcion.codigoBloque) }}</td>
+                            <td>{{ nombreMetadato(opcion) }}</td>
+                            <td>{{ opcion.tipo || '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="diagrama__traspaso-configurados">
+            <h5>Metadatos configurados ({{ traspasosTrabajo().length }})</h5>
+            @if (traspasosTrabajo().length === 0) {
+              <p class="diagrama__mensaje-vacio">No hay configuraciones de traspaso.</p>
+            } @else {
+              <table class="diagrama__traspaso-tabla diagrama__traspaso-tabla--configurados">
+                <thead>
+                  <tr>
+                    <th>Formulario origen</th>
+                    <th>Bloque</th>
+                    <th>Metadato</th>
+                    <th>Tipo</th>
+                    <th></th>
+                    <th>Bloque destino</th>
+                    <th>Metadato destino</th>
+                    <th>Tipo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (traspaso of traspasosTrabajo(); track $index) {
+                    <tr>
+                      <td>{{ traspaso.origen.nombreFormulario }}</td>
+                      <td>{{ bloqueDisplay(traspaso.origen.nombreBloque, traspaso.origen.codigoBloque) }}</td>
+                      <td>{{ traspaso.origen.nombreMetadato }}</td>
+                      <td>
+                        @if (traspaso.origen.esGrilla || traspaso.destino.esGrilla) {
+                          Grilla ({{ traspasoCantidadPares(traspaso) }} pares)
+                        } @else {
+                          {{ traspaso.origen.tipoMetadato || '—' }}
+                        }
+                      </td>
+                      <td class="diagrama__traspaso-flecha">
+                        <span nz-icon nzType="arrow-right"></span>
+                      </td>
+                      <td>{{ bloqueDisplay(traspaso.destino.nombreBloque, traspaso.destino.codigoBloque) }}</td>
+                      <td>{{ traspaso.destino.nombreMetadato }}</td>
+                      <td>
+                        @if (traspaso.origen.esGrilla || traspaso.destino.esGrilla) {
+                          Grilla
+                        } @else {
+                          {{ traspaso.destino.tipoMetadato || '—' }}
+                        }
+                      </td>
+                      <td>
+                        <button
+                          nz-button
+                          nzType="text"
+                          nzDanger
+                          type="button"
+                          nz-tooltip
+                          nzTooltipTitle="Eliminar"
+                          (click)="traspasoEliminar($index)"
+                        >
+                          <span nz-icon nzType="delete"></span>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      nzTitle="Configuración no permitida"
+      [nzVisible]="traspasoInvalidoModalAbierto()"
+      (nzOnCancel)="cerrarTraspasoInvalido()"
+      (nzOnOk)="cerrarTraspasoInvalido()"
+      nzOkText="Aceptar"
+    >
+      <ng-container *nzModalContent>
+        <p class="diagrama__traspaso-invalido-mensaje">{{ traspasoInvalidoMensaje() }}</p>
+      </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      nzTitle="Emparejamiento de columnas de grilla"
+      nzWidth="980px"
+      [nzVisible]="paresColumnasModalAbierto()"
+      (nzOnCancel)="cerrarParesColumnas()"
+      [nzFooter]="paresColumnasFooter"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__traspasos">
+          <p class="diagrama__traspaso-descripcion">
+            Empareje las columnas del metadato origen con las columnas del metadato destino.
+          </p>
+
+          <div class="diagrama__traspaso-selector">
+            <div class="diagrama__traspaso-panel">
+              <h5>Origen — {{ nombrePendienteOrigen() }}</h5>
+              <input
+                nz-input
+                class="diagrama__traspaso-buscador"
+                type="text"
+                placeholder="Buscar columna…"
+                [ngModel]="parFiltroOrigen()"
+                (ngModelChange)="parFiltroOrigen.set($event)"
+              >
+              <p class="diagrama__traspaso-contador">
+                Columnas: {{ traspasoPendienteOrigen()?.grilla?.columnas?.length ?? 0 }}
+              </p>
+              @if (paresColumnasOrigen().length === 0) {
+                <p class="diagrama__mensaje-vacio">Sin columnas para listar.</p>
+              } @else {
+                <div class="diagrama__traspaso-tabla-contenedor">
+                  @if (paresColumnasOrigen().length === 0) {
+                    <p class="diagrama__mensaje-vacio">Sin resultados para la búsqueda.</p>
+                  } @else {
+                    <table class="diagrama__traspaso-tabla">
+                      <thead>
+                        <tr>
+                          <th>Título</th>
+                          <th>Datafield</th>
+                          <th>Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (columna of paresColumnasOrigen(); track columna.id_columna_grilla) {
+                          <tr
+                            [class.diagrama__traspaso-fila-seleccionada]="parOrigenSeleccion()?.id_columna_grilla === columna.id_columna_grilla"
+                            [class.diagrama__traspaso-fila-deshabilitada]="parOrigenYaConfigurado(columna)"
+                            (click)="parSeleccionarOrigen(columna)"
+                          >
+                            <td>{{ columna.titulo }}</td>
+                            <td>{{ columna.datafield }}</td>
+                            <td>{{ columna.tipo_dato }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="diagrama__traspaso-accion">
+              <button
+                nz-button
+                nzType="primary"
+                type="button"
+                [disabled]="!parAgregarHabilitado()"
+                (click)="parAgregar()"
+              >
+                <span nz-icon nzType="double-right"></span>
+                Agregar
+              </button>
+            </div>
+
+            <div class="diagrama__traspaso-panel">
+              <h5>Destino — {{ nombrePendienteDestino() }}</h5>
+              <input
+                nz-input
+                class="diagrama__traspaso-buscador"
+                type="text"
+                placeholder="Buscar columna…"
+                [ngModel]="parFiltroDestino()"
+                (ngModelChange)="parFiltroDestino.set($event)"
+              >
+              <p class="diagrama__traspaso-contador">
+                Columnas: {{ traspasoPendienteDestino()?.grilla?.columnas?.length ?? 0 }}
+              </p>
+              @if (paresColumnasDestino().length === 0) {
+                <p class="diagrama__mensaje-vacio">Sin columnas para listar.</p>
+              } @else {
+                <div class="diagrama__traspaso-tabla-contenedor">
+                  @if (paresColumnasDestino().length === 0) {
+                    <p class="diagrama__mensaje-vacio">Sin resultados para la búsqueda.</p>
+                  } @else {
+                    <table class="diagrama__traspaso-tabla">
+                      <thead>
+                        <tr>
+                          <th>Título</th>
+                          <th>Datafield</th>
+                          <th>Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (columna of paresColumnasDestino(); track columna.id_columna_grilla) {
+                          <tr
+                            [class.diagrama__traspaso-fila-seleccionada]="parDestinoSeleccion()?.id_columna_grilla === columna.id_columna_grilla"
+                            [class.diagrama__traspaso-fila-deshabilitada]="parDestinoYaConfigurado(columna)"
+                            (click)="parSeleccionarDestino(columna)"
+                          >
+                            <td>{{ columna.titulo }}</td>
+                            <td>{{ columna.datafield }}</td>
+                            <td>{{ columna.tipo_dato }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="diagrama__traspaso-configurados">
+            <h5>Columnas emparejadas ({{ paresColumnasTrabajo().length }})</h5>
+            @if (paresColumnasTrabajo().length === 0) {
+              <p class="diagrama__mensaje-vacio">No hay columnas emparejadas.</p>
+            } @else {
+              <table class="diagrama__traspaso-tabla diagrama__traspaso-tabla--configurados">
+                <thead>
+                  <tr>
+                    <th>Título origen</th>
+                    <th>Datafield origen</th>
+                    <th>Tipo</th>
+                    <th></th>
+                    <th>Título destino</th>
+                    <th>Datafield destino</th>
+                    <th>Tipo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (par of paresColumnasTrabajo(); track $index) {
+                    <tr>
+                      <td>{{ par.origen.titulo }}</td>
+                      <td>{{ par.origen.datafield }}</td>
+                      <td>{{ par.origen.tipoDato }}</td>
+                      <td class="diagrama__traspaso-flecha">
+                        <span nz-icon nzType="arrow-right"></span>
+                      </td>
+                      <td>{{ par.destino.titulo }}</td>
+                      <td>{{ par.destino.datafield }}</td>
+                      <td>{{ par.destino.tipoDato }}</td>
+                      <td>
+                        <button
+                          nz-button
+                          nzType="text"
+                          nzDanger
+                          type="button"
+                          nz-tooltip
+                          nzTooltipTitle="Eliminar"
+                          (click)="parEliminar($index)"
+                        >
+                          <span nz-icon nzType="delete"></span>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        </div>
+      </ng-container>
+    </nz-modal>
+
+    <ng-template #seleccionMetadatosFooter>
+      <button nz-button (click)="cerrarSeleccionMetadatos()">Cancelar</button>
+      <button nz-button nzType="primary" (click)="guardarSeleccionMetadatos()">Guardar</button>
+    </ng-template>
+
+    <ng-template #crudFormulariosFooter>
+      <button nz-button nzType="primary" (click)="cerrarCrudFormularios()">Cerrar</button>
+    </ng-template>
+
+    <ng-template #paresColumnasFooter>
+      <button nz-button (click)="cerrarParesColumnas()">Cancelar</button>
+      <button
+        nz-button
+        nzType="primary"
+        [disabled]="!paresGuardarHabilitado()"
+        (click)="guardarParesColumnas()"
+      >
+        Guardar
+      </button>
+    </ng-template>
+  </nz-card>
+</section>

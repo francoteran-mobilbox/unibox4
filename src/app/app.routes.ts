@@ -26,6 +26,10 @@ export const routes: Routes = [
         path: 'inbox',
         loadChildren: () => import('@features/inbox/inbox.routes').then((m) => m.INBOX_ROUTES),
       },
+      {
+        path: 'diagrama',
+        loadChildren: () => import('@features/diagrama/diagrama.routes').then((m) => m.DIAGRAMA_ROUTES),
+      },
     ],
   },
   {

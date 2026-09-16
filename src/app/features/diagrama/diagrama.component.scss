@@ -1,0 +1,813 @@
+:host {
+  display: block;
+}
+
+.diagrama {
+  display: grid;
+  gap: 1rem;
+}
+
+.diagrama__header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.diagrama__title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.diagrama__subtitle {
+  margin: 0;
+  color: #475569;
+}
+
+.diagrama__card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.diagrama__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.diagrama__search {
+  max-width: 24rem;
+  border-radius: 8px;
+}
+
+.diagrama__reload {
+  flex-shrink: 0;
+}
+
+.diagrama__create {
+  flex-shrink: 0;
+}
+
+.diagrama__meta {
+  margin-left: auto;
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.diagrama__alert {
+  margin-bottom: 0.75rem;
+}
+
+.diagrama__validation-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.diagrama__cell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 21.875rem;
+}
+
+.diagrama__cell-title {
+  display: block;
+  max-width: 21.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagrama__cell-processrunning {
+  max-width: 25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagrama__cell-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.diagrama__expanded-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.5rem 0;
+  color: #334155;
+  font-size: 0.875rem;
+}
+
+.diagrama__bpmn-preview {
+  display: block;
+  width: 100%;
+  align-self: stretch;
+  margin-bottom: 0.5rem;
+}
+
+.diagrama__expanded-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.diagrama__expanded-hint {
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.diagrama__expanded-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin: 0.15rem 0 0.25rem;
+  color: #334155;
+  font-size: 0.8125rem;
+}
+
+.diagrama__expanded-meta-grid--execution {
+  margin-top: 0.1rem;
+}
+
+.diagrama__mobile-info {
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.diagrama__actions-col {
+  text-align: center;
+  width: 75px;
+}
+
+.diagrama__process-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.diagrama__process-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.diagrama__field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.diagrama__field--full {
+  grid-column: 1 / -1;
+}
+
+.diagrama__field-label {
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.diagrama__field--duration {
+  gap: 0.35rem;
+}
+
+.diagrama__duration-group {
+  display: grid;
+  grid-template-columns: 1fr minmax(120px, 180px);
+  gap: 0.55rem;
+}
+
+.diagrama__check-grid {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+
+  label{
+    margin-left: 0px !important;
+  }
+}
+
+.diagrama__associated-diagram {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+.diagrama__element-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.diagrama__element-modal-alert {
+  margin: 0 0.5rem 0.75rem;
+}
+
+.diagrama__tarea-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.diagrama__tarea-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.diagrama__tarea-grid .diagrama__field--full {
+  grid-column: 1 / -1;
+}
+
+.diagrama__tarea-collapse {
+  margin-top: 0.25rem;
+}
+
+.diagrama__mensaje-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.diagrama__field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.diagrama__field-label-row .diagrama__field-label {
+  margin-bottom: 0;
+}
+
+.diagrama__mensaje-editor-inline {
+  display: block;
+  width: 100%;
+}
+
+.diagrama__mensaje-par-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.diagrama__transicion-regla {
+  display: flex;
+  flex-direction: row;
+  gap: 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.diagrama__transicion-conexion {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 0.8125rem;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.diagrama__transicion-regla > nz-select,
+.diagrama__transicion-regla > .diagrama__transicion-regla-linea {
+  width: 100%;
+}
+
+.diagrama__transicion-regla-negocio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.diagrama__transicion-regla-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.diagrama__transicion-regla-col > nz-select,
+.diagrama__transicion-regla-col > input[nz-input] {
+  width: 100%;
+}
+
+.diagrama__mensaje-aviso-dgd {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.diagrama__mensaje-empty-hint {
+  color: #64748b;
+  font-size: 0.8125rem;
+  margin: 0 0 0.65rem;
+}
+
+.diagrama__mensaje-link-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.diagrama__mensaje-row-label {
+  min-width: 3.5rem;
+}
+
+.diagrama__mensaje-summary {
+  flex: 1 1 auto;
+  color: #475569;
+  font-size: 0.8125rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+.diagrama__mensaje-error {
+  color: #b91c1c;
+  font-size: 0.75rem;
+}
+
+.diagrama__mensaje-token-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.diagrama__mensaje-token-select {
+  min-width: 180px;
+  flex: 0 1 220px;
+}
+
+.diagrama__mensaje-editor {
+  padding-bottom: 1rem;
+}
+
+.diagrama__mensaje-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.diagrama__mensaje-empty-hint {
+  color: #64748b;
+  font-size: 0.8125rem;
+  margin: 0 0 0.75rem;
+}
+
+.diagrama__diagram-edited {
+  color: #0369a1;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 768px) {
+  .diagrama__toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .diagrama__tarea-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diagrama__create,
+  .diagrama__reload {
+    width: 100%;
+  }
+
+  .diagrama__card {
+    overflow-x: auto;
+  }
+
+  .diagrama :where(table) {
+    min-width: 780px;
+  }
+
+  .diagrama__col-medium {
+    display: none;
+  }
+
+  .diagrama__cell-main {
+    max-width: 15.5rem;
+  }
+
+  .diagrama__cell-title {
+    max-width: 15.5rem;
+  }
+
+  .diagrama__cell-processrunning {
+    max-width: 15.5rem;
+  }
+
+  .diagrama__expanded-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diagrama__expanded-actions {
+    align-items: flex-start;
+  }
+
+  .diagrama__process-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diagrama__duration-group {
+    grid-template-columns: 1fr;
+  }
+
+  .diagrama__transicion-regla-negocio {
+    grid-template-columns: 1fr;
+  }
+
+  .diagrama__jornada-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diagrama__meta {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 1360px) and (min-width: 769px) {
+  .diagrama__col-desktop-collapsible {
+    display: none;
+  }
+
+  .diagrama :where(table) {
+    min-width: 860px;
+  }
+}
+
+/* ====== Mecanismo select con icono ====== */
+.diagrama__field--mecanismo {
+  .diagrama__select-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .diagrama__select-flex {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* ====== Modal configuración mecanismo ====== */
+.diagrama__config-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.diagrama__config-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.diagrama__config-row:last-child {
+  border-bottom: none;
+}
+
+.diagrama__config-label {
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.diagrama__config-subrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+/* ====== Jornada / Calendario ====== */
+.diagrama__jornada-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* ====== Compartir acceso ====== */
+.diagrama__share-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.diagrama__config-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: #f1f5f9;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 500;
+  justify-content: center;
+}
+
+.diagrama__config-row--readonly {
+  gap: 0.35rem;
+  background: #f8fafc;
+}
+
+.diagrama__config-hint {
+  color: #94a3b8;
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
+/* ====== Modal Selección de metadatos ====== */
+.diagrama__seleccion-metadatos {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.diagrama__seccion-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.diagrama__seccion-cabecera h4 {
+  margin: 0;
+}
+
+.diagrama__formulario-select {
+  width: 100%;
+}
+
+.diagrama__formulario-detalle {
+  color: #94a3b8;
+  font-size: 0.8125rem;
+  margin-left: 0.25rem;
+}
+
+.diagrama__mensaje-vacio {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.diagrama__metadato-todos {
+  margin: 0;
+}
+
+.diagrama__bloque-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.diagrama__bloque-titulo {
+  font-weight: 600;
+}
+
+.diagrama__bloque-contador {
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.diagrama__metadato-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.diagrama__metadato-fila {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.15rem 0;
+}
+
+/* ====== CRUD Formularios de proceso ====== */
+.diagrama__crud-formularios {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.diagrama__crud-cabecera {
+  display: flex;
+}
+
+.diagrama__fila-formulario {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.diagrama__fila-formulario--edicion {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.diagrama__ff-nombre {
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
+.diagrama__ff-formulario {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.diagrama__ff-nombre-nombre {
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
+.diagrama__ff-visibilidad-texto {
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+/* ====== Fila dividida Formularios / Traspasos ====== */
+.diagrama__seccion-formularios-fila {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+.diagrama__traspaso-resumen {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.diagrama__formularios-proceso {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+/* ====== Modal Configuración de traspasos ====== */
+.diagrama__traspasos {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.diagrama__traspaso-descripcion {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.diagrama__traspaso-invalido-mensaje {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.875rem;
+}
+
+.diagrama__traspaso-selector {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.diagrama__traspaso-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.diagrama__traspaso-panel h5 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.diagrama__traspaso-formulario-select {
+  width: 100%;
+}
+
+.diagrama__traspaso-buscador {
+  width: 100%;
+}
+
+.diagrama__traspaso-tabla-contenedor {
+  height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.diagrama__traspaso-tabla-contenedor .diagrama__traspaso-tabla thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.diagrama__traspaso-contador {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.diagrama__traspaso-accion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2.5rem;
+}
+
+.diagrama__traspaso-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+
+  th,
+  td {
+    border: 1px solid #e2e8f0;
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+  }
+
+  thead th {
+    background: #f1f5f9;
+    font-weight: 600;
+  }
+}
+
+.diagrama__traspaso-tabla tbody tr {
+  cursor: pointer;
+}
+
+.diagrama__traspaso-tabla tbody .diagrama__traspaso-fila-seleccionada {
+  background: #e0f2fe;
+}
+
+.diagrama__traspaso-tabla tbody .diagrama__traspaso-fila-deshabilitada {
+  cursor: default;
+
+  td {
+    color: #cbd5e1;
+  }
+}
+
+.diagrama__traspaso-tabla--configurados tbody tr {
+  cursor: default;
+}
+
+.diagrama__traspaso-flecha {
+  text-align: center;
+  color: #64748b;
+}
