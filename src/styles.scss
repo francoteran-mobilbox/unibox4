@@ -4,3 +4,64 @@
 @use 'styles/base/reset';
 @use 'styles/base/typography';
 @use 'styles/utilities/utilities';
+
+@import 'quill/dist/quill.snow.css';
+
+/* ng-zorro: posición superior y altura máxima de todos los modales */
+.ant-modal {
+  top: 50px;
+}
+
+.ant-modal .ant-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 98px); /* 50px superior + 24px de holgura inferior */
+}
+
+.ant-modal .ant-modal-header,
+.ant-modal .ant-modal-footer {
+  flex-shrink: 0;
+}
+
+.ant-modal .ant-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ql-font span[data-value='arial']::before {
+  content: 'Arial';
+}
+.ql-font span[data-value='verdana']::before {
+  content: 'Verdana';
+}
+.ql-font span[data-value='times-new-roman']::before {
+  content: 'Times New Roman';
+}
+.ql-font span[data-value='georgia']::before {
+  content: 'Georgia';
+}
+.ql-font span[data-value='courier-new']::before {
+  content: 'Courier New';
+}
+
+.ql-font-arial,
+.ql-font span[data-value='arial'] {
+  font-family: Arial, Helvetica, sans-serif;
+}
+.ql-font-verdana,
+.ql-font span[data-value='verdana'] {
+  font-family: Verdana, Geneva, sans-serif;
+}
+.ql-font-times-new-roman,
+.ql-font span[data-value='times-new-roman'] {
+  font-family: 'Times New Roman', Times, serif;
+}
+.ql-font-georgia,
+.ql-font span[data-value='georgia'] {
+  font-family: Georgia, serif;
+}
+.ql-font-courier-new,
+.ql-font span[data-value='courier-new'] {
+  font-family: 'Courier New', Courier, monospace;
+}

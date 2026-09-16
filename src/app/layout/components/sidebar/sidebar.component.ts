@@ -43,6 +43,7 @@ export class SidebarComponent {
       { id: 'enviadas', label: 'Enviadas', icon: 'send', route: '/inbox/enviadas' },
       { id: 'procesos-ejecucion', label: 'Procesos‑Ejecución', icon: 'profile', route: '/inbox/procesos-ejecucion' },
     ]},
+    { id: 'diagrama', label: 'Diagrama', icon: 'profile', route: '/diagrama' },
     { id: 'users', label: 'Usuarios', icon: 'team' },
     { id: 'reports', label: 'Reportes', icon: 'bar-chart' },
     { id: 'settings', label: 'Configuración', icon: 'setting' },

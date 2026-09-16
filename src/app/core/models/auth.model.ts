@@ -9,4 +9,5 @@ export interface LoginCredentials {
 export interface AuthSession {
   readonly user: User;
   readonly persistent: boolean;
+  readonly accessToken: string;
 }
