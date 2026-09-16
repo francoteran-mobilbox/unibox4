@@ -227,6 +227,7 @@ export interface TimerMetadatoPendiente {
 
 export function construirTimerConfigDesdeActividad(
   actividad: ActividadTareaProceso,
+  formularios: readonly FormularioProcesoConfig[],
 ): TimerConfig {
   const timer = actividad.timers[0];
 
@@ -249,7 +250,9 @@ export function construirTimerConfigDesdeActividad(
     duracionUnidad: esTiempo ? timer.id_unidad_tiempo ?? null : null,
     fecha: datoFijoTipo === 'fecha' ? timer.fecha ?? null : null,
     hora: datoFijoTipo === 'fecha' ? timer.hora ?? null : null,
-    idDocumento: null,
+    idDocumento: timer.es_met_formulario
+      ? idFormularioPorDocComun(formularios, timer.doc_comun_id)
+      : null,
     idMetadato: null,
     activityId: actividad.activity_id,
   };

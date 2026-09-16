@@ -233,7 +233,7 @@ describe('tareas-proceso.mapper', () => {
       ],
     });
 
-    const config = construirTimerConfigDesdeActividad(actividad);
+    const config = construirTimerConfigDesdeActividad(actividad, FORMULARIOS);
 
     expect(config.modo).toBe('datoFijo');
     expect(config.datoFijoTipo).toBe('tiempo');
@@ -264,7 +264,7 @@ describe('tareas-proceso.mapper', () => {
       ],
     });
 
-    const config = construirTimerConfigDesdeActividad(actividad);
+    const config = construirTimerConfigDesdeActividad(actividad, FORMULARIOS);
 
     expect(config.datoFijoTipo).toBe('fecha');
     expect(config.fecha).toBe('2026-01-31');
@@ -272,7 +272,7 @@ describe('tareas-proceso.mapper', () => {
     expect(config.duracionValor).toBeNull();
   });
 
-  it('marca el pendiente de resolución para timer en modo metadato', () => {
+  it('resuelve idDocumento y marca pendiente para timer en modo metadato', () => {
     const actividad = actividadBase({
       activitytype_id: 'timer',
       es_timer: true,
@@ -293,16 +293,42 @@ describe('tareas-proceso.mapper', () => {
       ],
     });
 
-    const config = construirTimerConfigDesdeActividad(actividad);
+    const config = construirTimerConfigDesdeActividad(actividad, FORMULARIOS);
 
     expect(config.modo).toBe('metadatoFormulario');
-    expect(config.idDocumento).toBeNull();
+    expect(config.idDocumento).toBe(802);
     expect(config.idMetadato).toBeNull();
     expect(timerMetadatoPendiente(actividad, 'Timer_1')).toEqual({
       claveElemento: 'Timer_1',
       docComunId: 4164,
       idMetadato: 57,
     });
+  });
+
+  it('deja idDocumento null si el doc_comun_id no resuelve', () => {
+    const actividad = actividadBase({
+      activitytype_id: 'timer',
+      es_timer: true,
+      timers: [
+        {
+          es_fecha: false,
+          es_tiempo: false,
+          es_dato_fijo: false,
+          es_met_formulario: true,
+          dato_fijo: null,
+          fecha: '',
+          hora: '',
+          id_unidad_tiempo: '',
+          id_metadato: 57,
+          id_bloque: 5646,
+          doc_comun_id: 9999,
+        },
+      ],
+    });
+
+    const config = construirTimerConfigDesdeActividad(actividad, FORMULARIOS);
+
+    expect(config.idDocumento).toBeNull();
   });
 
   it('mapea el mensaje con destinatarios, referencias y copia', () => {

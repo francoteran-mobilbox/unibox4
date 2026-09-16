@@ -38,7 +38,8 @@ import {
   ShareAltOutline,
   ApartmentOutline,
   FileSearchOutline,
-  ArrowRightOutline
+  ArrowRightOutline,
+  CheckSquareOutline
 } from '@ant-design/icons-angular/icons';
 
 export const APP_ICONS: IconDefinition[] = [
@@ -80,5 +81,6 @@ export const APP_ICONS: IconDefinition[] = [
   ShareAltOutline,
   ApartmentOutline,
   FileSearchOutline,
-  ArrowRightOutline
+  ArrowRightOutline,
+  CheckSquareOutline
 ];

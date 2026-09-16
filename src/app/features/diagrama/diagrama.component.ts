@@ -2358,7 +2358,7 @@ export class DiagramaComponent {
       } else if (actividad.activitytype_id === 'timer') {
         timerConfigs = {
           ...timerConfigs,
-          [clave]: construirTimerConfigDesdeActividad(actividad),
+          [clave]: construirTimerConfigDesdeActividad(actividad, formularios),
         };
         const pendiente = timerMetadatoPendiente(actividad, clave);
 
