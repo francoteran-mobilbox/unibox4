@@ -540,10 +540,10 @@
     </nz-modal>
 
     <nz-modal
-      [nzVisible]="procesoDiagramModalVisible()"
+      [nzVisible]="procesoDiagramaMontadoVisible()"
       nzTitle="Diagrama asociado"
       [nzWidth]="isDesktop() ? 1100 : 'calc(100vw - 32px)'"
-      nzClassName="diagrama-modal"
+      [nzClassName]="diagramaModalClase()"
       [nzMaskClosable]="false"
       (nzOnCancel)="onCerrarDiagramaAsociadoModal()"
       [nzFooter]="diagramaAsociadoFooter"
@@ -575,7 +575,7 @@
           <app-bpmn-base-preview
             #procesoDiagramaPreview
             class="diagrama__bpmn-preview"
-            [legacyXml]="procesoEditSourceXml()"
+            [legacyXml]="procesoDiagramaXmlBase()"
             [editable]="true"
             (diagramEdited)="onProcesoModalDiagramEdited()"
             (elementActivated)="onDiagramaElementoActivado($event)"
@@ -1385,7 +1385,7 @@
                         nzPlaceHolder="Documento"
                         nzAllowClear
                       >
-                        @for (doc of documentosOptions(); track doc.value) {
+                        @for (doc of documentosReglasProceso(); track doc.value) {
                           <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                         }
                       </nz-select>
@@ -1480,7 +1480,7 @@
                         nzPlaceHolder="Documento"
                         nzAllowClear
                       >
-                        @for (doc of documentosOptions(); track doc.value) {
+                        @for (doc of documentosReglasProceso(); track doc.value) {
                           <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                         }
                       </nz-select>
@@ -2224,89 +2224,289 @@
       <ng-container *nzModalContent>
         <div class="diagrama__crud-formularios">
           <div class="diagrama__crud-cabecera">
-            <button nz-button nzType="primary" type="button" (click)="crearFilaFormularioProceso()">
-              Crear nuevo
+            <span class="diagrama__crud-contador">
+              {{ formulariosProceso().length }} formularios
+            </span>
+            <button
+              nz-button
+              nzType="primary"
+              type="button"
+              (click)="abrirFormularioEditModal()"
+            >
+              <span nz-icon nzType="plus" nzTheme="outline"></span>
+              Crear formulario
             </button>
           </div>
-          @for (fila of formulariosProceso(); track fila.id) {
-            @if (filaFormularioEditandoId() === fila.id) {
-              <div class="diagrama__fila-formulario diagrama__fila-formulario--edicion">
-                <div class="diagrama__ff-nombre">
-                  <input
-                    nz-input
-                    type="text"
-                    placeholder="Nombre *"
-                    [ngModel]="fila.nombre"
-                    (ngModelChange)="actualizarFilaFormularioProceso(fila.id, { nombre: $event })"
-                  >
-                </div>
-                <div class="diagrama__ff-formulario">
-                  <nz-select
-                    [ngModel]="formularioSeleccionadoValor(fila)"
-                    (ngModelChange)="actualizarFormularioProcesoFila(fila.id, $event)"
-                    nzPlaceHolder="Selecciona documento"
-                    nzAllowClear
-                  >
-                    @for (option of documentosLivianoOptions(); track option.value) {
-                      <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
-                    }
-                  </nz-select>
-                </div>
-                <div class="diagrama__ff-visibilidad">
-                  <nz-radio-group
-                    [ngModel]="fila.visibilidad"
-                    (ngModelChange)="actualizarFilaFormularioProceso(fila.id, { visibilidad: $event })"
-                  >
-                    @for (option of tareaFormularioVisibilidadOptions; track option.value) {
-                      <label nz-radio [nzValue]="option.value">{{ option.label }}</label>
-                    }
-                  </nz-radio-group>
-                </div>
+
+          @if (formulariosProceso().length === 0) {
+            <div class="diagrama__crud-vacio">
+              <nz-empty nzNotFoundContent="No hay formularios de proceso">
                 <button
                   nz-button
                   nzType="primary"
                   type="button"
-                  [disabled]="fila.nombre === '' || fila.idFormulario === 0"
-                  (click)="guardarFilaFormularioProceso(fila.id)"
+                  (click)="abrirFormularioEditModal()"
                 >
-                  Guardar
+                  <span nz-icon nzType="plus" nzTheme="outline"></span>
+                  Crear formulario
                 </button>
-                <button
-                  nz-button
-                  type="button"
-                  (click)="cancelarEdicionFilaFormularioProceso(fila.id)"
-                >
-                  Cancelar
-                </button>
-              </div>
-            } @else {
-              <div class="diagrama__fila-formulario">
-                <span class="diagrama__ff-nombre-nombre">{{ fila.nombre || 'Sin nombre' }}</span>
-                <span class="diagrama__ff-formulario">{{ nombreDocumentoDeFormulario(fila) }}</span>
-                <span class="diagrama__ff-visibilidad-texto">
-                  {{ fila.visibilidad === 'publico' ? 'Público' : 'Privado' }}
-                </span>
-                <button nz-button nzType="text" type="button" (click)="editarFilaFormularioProceso(fila.id)">
-                  Editar
-                </button>
-                <button
-                  nz-button
-                  nzType="text"
-                  nzDanger
-                  type="button"
-                  (click)="eliminarFilaFormularioProceso(fila.id)"
-                >
-                  Eliminar
-                </button>
-              </div>
-            }
-          } @empty {
-            <p class="diagrama__mensaje-vacio">
-              No hay formularios de proceso. Presiona "Crear nuevo".
-            </p>
+              </nz-empty>
+            </div>
+          } @else {
+            <nz-table
+              #formulariosTabla
+              [nzData]="formulariosProceso()"
+              [nzFrontPagination]="true"
+              [nzPageSize]="8"
+              nzSize="small"
+              class="diagrama__tabla-formularios"
+            >
+              <thead>
+                <tr>
+                  <th nzWidth="27%">Nombre</th>
+                  <th nzWidth="29%">Documento</th>
+                  <th nzWidth="16%">Visibilidad</th>
+                  <th nzWidth="12%">Compartido</th>
+                  <th nzWidth="16%" class="diagrama__acc-col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (fila of formulariosTabla.data; track fila.id) {
+                  <tr>
+                    <td>
+                      <span
+                        class="diagrama__celda-nombre"
+                        nz-tooltip
+                        [nzTooltipTitle]="fila.nombre"
+                      >
+                        {{ fila.nombre }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="diagrama__celda-documento" nz-tooltip [nzTooltipTitle]="nombreDocumentoDeFormulario(fila)">
+                        <span nz-icon nzType="file-text" nzTheme="outline"></span>
+                        <span>{{ nombreDocumentoDeFormulario(fila) }}</span>
+                      </span>
+                    </td>
+                    <td>
+                      <nz-tag [nzColor]="fila.visibilidad === 'publico' ? 'green' : 'orange'">
+                        {{ fila.visibilidad === 'publico' ? 'Público' : 'Privado' }}
+                      </nz-tag>
+                    </td>
+                    <td>
+                      @if (fila.visibilidad === 'privado') {
+                        @if (formularioEsCompartido(fila)) {
+                          <nz-tag
+                            nzColor="blue"
+                            nz-tooltip
+                            [nzTooltipTitle]="resumenCompartido(fila)"
+                          >
+                            Si
+                          </nz-tag>
+                        } @else {
+                          <nz-tag nzColor="default" nz-tooltip nzTooltipTitle="Sin acceso compartido configurado">
+                            No
+                          </nz-tag>
+                        }
+                      } @else {
+                        <span class="diagrama__celda-na">—</span>
+                      }
+                    </td>
+                    <td class="diagrama__acc-col">
+                      <button
+                        nz-button
+                        nzType="text"
+                        nz-tooltip
+                        nzTooltipTitle="Editar formulario"
+                        aria-label="Editar formulario"
+                        (click)="abrirFormularioEditModalExistente(fila.id)"
+                      >
+                        <span nz-icon nzType="edit" nzTheme="outline"></span>
+                      </button>
+                      @if (fila.visibilidad === 'privado') {
+                        <button
+                          nz-button
+                          nzType="text"
+                          nz-tooltip
+                          nzTooltipTitle="Compartir acceso"
+                          aria-label="Compartir acceso"
+                          (click)="abrirFormularioCompartir(fila.id)"
+                        >
+                          <span nz-icon nzType="share-alt" nzTheme="outline"></span>
+                        </button>
+                      }
+                      <nz-popconfirm
+                        nzPopconfirmTitle="¿Eliminar este formulario?"
+                        nzOkText="Eliminar"
+                        nzOkDanger
+                        nzCancelText="Cancelar"
+                        nzPopconfirmPlacement="bottomRight"
+                        (nzOnConfirm)="eliminarFilaFormularioProceso(fila.id)"
+                      >
+                        <button
+                          nz-popconfirm
+                          nz-button
+                          nzType="text"
+                          nzDanger
+                          nz-tooltip
+                          nzTooltipTitle="Eliminar"
+                          aria-label="Eliminar formulario"
+                        >
+                          <span nz-icon nzType="delete" nzTheme="outline"></span>
+                        </button>
+                      </nz-popconfirm>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </nz-table>
           }
         </div>
       </ng-container>
+    </nz-modal>
+
+    <nz-modal
+      [nzTitle]="formularioEditId() === null ? 'Nuevo formulario de proceso' : 'Editar formulario de proceso'"
+      nzWidth="520"
+      [nzVisible]="formularioEditModalAbierto()"
+      [nzMaskClosable]="false"
+      (nzOnCancel)="cerrarFormularioEditModal()"
+      [nzFooter]="formularioEditFooter"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__ff-edit">
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">
+              Nombre <span class="diagrama__campo-requerido">*</span>
+            </span>
+            <input
+              nz-input
+              id="formulario-edit-nombre"
+              type="text"
+              placeholder="Nombre del formulario"
+              [class.diagrama__input-error]="formularioEditNombreInvalido()"
+              [ngModel]="formularioEditNombre()"
+              (ngModelChange)="formularioEditNombre.set($event)"
+            >
+            @if (formularioEditNombreInvalido()) {
+              <small class="diagrama__campo-error-texto">El nombre es obligatorio.</small>
+            }
+          </div>
+
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">
+              Documento <span class="diagrama__campo-requerido">*</span>
+            </span>
+            <nz-select
+              class="diagrama__select-full"
+              [ngModel]="formularioEditDocumentoValor()"
+              (ngModelChange)="formularioEditDocumentoValor.set($event)"
+              nzPlaceHolder="Selecciona documento"
+              nzAllowClear
+              nzShowSearch
+              [nzLoading]="documentosLivianoCargando()"
+              [class.diagrama__select-error]="formularioEditDocumentoInvalido()"
+            >
+              @for (option of documentosLivianoOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+            @if (formularioEditDocumentoInvalido()) {
+              <small class="diagrama__campo-error-texto">Selecciona un documento.</small>
+            }
+          </div>
+
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Visibilidad</span>
+            <nz-radio-group
+              [ngModel]="formularioEditVisibilidad()"
+              (ngModelChange)="formularioEditVisibilidad.set($event)"
+            >
+              @for (option of tareaFormularioVisibilidadOptions; track option.value) {
+                <label nz-radio [nzValue]="option.value">{{ option.label }}</label>
+              }
+            </nz-radio-group>
+            @if (formularioEditVisibilidad() === 'privado') {
+              <small class="diagrama__campo-ayuda">
+                Después podrás compartirlo con áreas, cargos y usuarios específicos desde la tabla.
+              </small>
+            }
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #formularioEditFooter>
+        <button nz-button type="button" (click)="cerrarFormularioEditModal()">Cancelar</button>
+        <button nz-button nzType="primary" type="button" (click)="guardarFormularioEdit()">
+          Guardar
+        </button>
+      </ng-template>
+    </nz-modal>
+
+    <nz-modal
+      nzTitle="Compartir formulario de proceso"
+      nzWidth="520"
+      [nzVisible]="formularioCompartirModalAbierto()"
+      [nzMaskClosable]="false"
+      (nzOnCancel)="cerrarFormularioCompartir()"
+      [nzFooter]="formularioCompartirFooter"
+    >
+      <ng-container *nzModalContent>
+        <div class="diagrama__ff-edit">
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Áreas</span>
+            <nz-select
+              class="diagrama__select-full"
+              nzMode="multiple"
+              [ngModel]="formCompartirGrupo()"
+              (ngModelChange)="formCompartirGrupo.set($event)"
+              nzPlaceHolder="Selecciona áreas"
+              nzAllowClear
+            >
+              @for (option of areasOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Cargos</span>
+            <nz-select
+              class="diagrama__select-full"
+              nzMode="multiple"
+              [ngModel]="formCompartirCargo()"
+              (ngModelChange)="formCompartirCargo.set($event)"
+              nzPlaceHolder="Selecciona cargos"
+              nzAllowClear
+            >
+              @for (option of cargosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="diagrama__field diagrama__field--full">
+            <span class="diagrama__field-label">Usuarios</span>
+            <nz-select
+              class="diagrama__select-full"
+              nzMode="multiple"
+              [ngModel]="formCompartirUsuario()"
+              (ngModelChange)="formCompartirUsuario.set($event)"
+              nzPlaceHolder="Selecciona usuarios"
+              nzAllowClear
+            >
+              @for (option of usuariosOptions(); track option.value) {
+                <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+              }
+            </nz-select>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #formularioCompartirFooter>
+        <button nz-button type="button" (click)="cerrarFormularioCompartir()">Cancelar</button>
+        <button nz-button nzType="primary" type="button" (click)="guardarFormularioCompartir()">
+          Guardar
+        </button>
+      </ng-template>
     </nz-modal>
 
     <nz-modal
@@ -2314,6 +2514,8 @@
       nzWidth="850px"
       [nzVisible]="traspasosModalAbierto()"
       (nzOnCancel)="cerrarConfigurarTraspasos()"
+      (nzOnOk)="cerrarConfigurarTraspasos()"
+      nzOkText="Aceptar"
     >
       <ng-container *nzModalContent>
         <div class="diagrama__traspasos">
@@ -2380,6 +2582,7 @@
                         @for (opcion of traspasoOrigenMetadatosFiltrados(); track opcion.value) {
                           <tr
                             [class.diagrama__traspaso-fila-seleccionada]="traspasoOrigenSeleccion() === opcion.value"
+                            [class.diagrama__traspaso-fila-deshabilitada]="traspasoOrigenYaConfigurado(opcion)"
                             (click)="traspasoSeleccionarOrigenMetadato(opcion)"
                           >
                             <td>{{ bloqueDisplay(opcion.nombreBloque, opcion.codigoBloque) }}</td>

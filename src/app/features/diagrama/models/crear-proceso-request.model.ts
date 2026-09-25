@@ -61,9 +61,33 @@ export interface CargoResponsableRequest {
   readonly condicionesVisibilidad: readonly unknown[];
 }
 
+export interface DatoRequeridoProcesoDatoRequest {
+  readonly idDatoReqProceso: number | null;
+  readonly processId: number | null;
+  readonly idDatoReqMecanismo: number;
+  readonly idDatoDisponibleProceso: string;
+  readonly valorTextoFijo: string;
+  readonly nombreSecuencia: string;
+}
+
+export interface DatoRequeridoProcesoMetadatoRequest {
+  readonly idDatoReqProceso: number | null;
+  readonly idDocumento: number;
+  readonly idMetadato: number;
+  readonly idBloque: number;
+  readonly codigoBloque: string;
+  readonly docComunId: number | null;
+}
+
+export interface DatoRequeridoProcesoRequest {
+  readonly dato: DatoRequeridoProcesoDatoRequest;
+  readonly metadatoRequerido: DatoRequeridoProcesoMetadatoRequest | null;
+  readonly nombreDocumentoComun: string | null;
+}
+
 export interface ProcesoMecanismoRequest {
   readonly idMecanismoDenominacion: number;
-  readonly datosRequeridos: readonly unknown[];
+  readonly datosRequeridos: readonly DatoRequeridoProcesoRequest[];
 }
 
 export interface MetadatoDisponibleRequest {
@@ -74,6 +98,7 @@ export interface MetadatoDisponibleRequest {
     readonly idMetadato: number;
     readonly idBloque: number;
   };
+  readonly codigoBloque: string;
 }
 
 export interface DocumentoComunActividadRequest {
@@ -87,6 +112,7 @@ export interface DocumentoComunActividadRequest {
 export interface BloqueMetadatoRequest {
   readonly nombreBloque: string | null;
   readonly codigoBloque: string | null;
+  readonly idBloque?: number | null;
 }
 
 export interface MetadatoRequeridoTransferidoRequest {
@@ -119,9 +145,24 @@ export interface DocumentoComunProcesoTransferidoRequest {
 }
 
 export interface MetadatoTransferidoRequest {
-  readonly documentoComunProceso: DocumentoComunProcesoTransferidoRequest;
-  readonly bloqueMetadatoRequeridoOrigen: BloqueMetadatoRequeridoRequest;
-  readonly bloqueMetadatoRequeridoDestino: BloqueMetadatoRequeridoRequest;
+  readonly metadatoTransferidoId: number | null;
+  readonly activityId: number | null;
+  readonly nombreDocComunOrigen: string;
+  readonly docComunIdOrigen: number | null;
+  readonly idDocumentoOrigen: number;
+  readonly idMetadatoOrigen: number;
+  readonly idBloqueOrigen: number | null;
+  readonly codigoBloqueOrigen: string | null;
+  readonly docComunIdDestino: number | null;
+  readonly idDocumentoDestino: number;
+  readonly idMetadatoDestino: number;
+  readonly idBloqueDestino: number | null;
+  readonly codigoBloqueDestino: string | null;
+  readonly columnasTransferidasDestino?: readonly ColumnaTransferidaRequest[];
+}
+
+export interface PermisosUsuarioProcesoRequest {
+  readonly id_usuario: string;
 }
 
 export interface DocumentoComunActividadWrapperRequest {
@@ -174,10 +215,15 @@ export interface ActividadRequest {
   readonly esConfiguracion: boolean;
 }
 
+export interface UsuariosPreAsignadoRequest {
+  readonly idUsuario: string;
+  readonly idProcedencia: string;
+}
+
 export interface ActividadWrapperRequest {
   readonly actividad: ActividadRequest;
   readonly rolesGenericos: readonly unknown[];
-  readonly usuariosPreAsignados: readonly unknown[];
+  readonly usuariosPreAsignados: readonly UsuariosPreAsignadoRequest[];
   readonly rolesPreAsignados: readonly unknown[];
   readonly documentosComunesActividad: readonly DocumentoComunActividadWrapperRequest[];
   readonly elementosRequeridos: readonly unknown[];
@@ -198,22 +244,68 @@ export interface TransicionRequest {
   readonly levantaForm: boolean;
 }
 
+export interface ReglaUsuarioRequest {
+  readonly idReglaUsuario: number | null;
+  readonly idDocIzq: number | null;
+  readonly idBloqIzq: number | null;
+  readonly codigoBloqIzq: string | null;
+  readonly idMetIzq: number | null;
+  readonly idRolDer: number | null;
+  readonly idBloqDer: number | null;
+  readonly codigoBloqDer: string | null;
+  readonly idMetDer: number | null;
+  readonly campoValor2: boolean;
+}
+
+export interface ReglaNegocioRequest {
+  readonly idReglaNegocio: number | null;
+  readonly idOperadorRegla: string | null;
+  readonly izqEsDoc: boolean;
+  readonly izqIdMetadato: number | null;
+  readonly izqIdBloque: number | null;
+  readonly izqCodigoBloque: string | null;
+  readonly izqIdTipoDato: string | null;
+  readonly izqIdOperando: number | null;
+  readonly derEsDoc: boolean;
+  readonly derIdMetadato: number | null;
+  readonly derIdBloque: number | null;
+  readonly derCodigoBloque: string | null;
+  readonly derIdTipoDato: string | null;
+  readonly derIdOperando: number | null;
+  readonly derValorOperando: string | null;
+}
+
+export interface TimerTransicionRequest {
+  readonly idTimerProceso: number | null;
+  readonly esMetFormulario: boolean;
+  readonly docComunId: number | null;
+  readonly idBloque: number | null;
+  readonly idMetadato: number | null;
+  readonly esDatoFijo: boolean;
+  readonly esTiempo: boolean;
+  readonly datoFijo: string;
+  readonly idUnidadTiempo: string;
+  readonly esFecha: boolean;
+  readonly fecha: string;
+  readonly hora: string;
+}
+
 export interface TransicionWrapperRequest {
   readonly transicion: TransicionRequest;
   readonly idActividadOrigen: string;
   readonly idActividadDestino: string;
-  readonly reglasUsuario: readonly unknown[];
-  readonly reglasNegocio: readonly unknown[];
-  readonly tieneTimer: unknown;
-  readonly timer: unknown;
-  readonly conInterrupcion: unknown;
+  readonly reglasUsuario: readonly ReglaUsuarioRequest[];
+  readonly reglasNegocio: readonly ReglaNegocioRequest[];
+  readonly tieneTimer: boolean | null;
+  readonly timer: TimerTransicionRequest | null;
+  readonly conInterrupcion: boolean | null;
 }
 
 export interface CrearProcesoRequest {
   readonly proceso: ProcesoRequest;
-  readonly permisosUsuarios: readonly unknown[];
-  readonly permisosRoles: readonly unknown[];
-  readonly permisosGrupos: readonly unknown[];
+  readonly permisosUsuarios: readonly PermisosUsuarioProcesoRequest[];
+  readonly permisosRoles: readonly number[];
+  readonly permisosGrupos: readonly number[];
   readonly rolesGenericosProceso: readonly unknown[];
   readonly documentosComunes: readonly DocumentoComunProcesoWrapperRequest[];
   readonly cargosResponsables: readonly CargoResponsableRequest[];

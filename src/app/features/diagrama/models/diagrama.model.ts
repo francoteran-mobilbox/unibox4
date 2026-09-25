@@ -127,6 +127,9 @@ export interface DocumentoComunProceso {
   readonly nombre_documento: string;
   readonly privado: boolean;
   readonly compartido: boolean;
+  readonly permisosGrupos?: readonly unknown[];
+  readonly permisosUsuarios?: readonly unknown[];
+  readonly permisosRoles?: readonly unknown[];
 }
 
 export interface ReglaNegocioActividad {

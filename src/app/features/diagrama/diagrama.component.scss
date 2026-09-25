@@ -636,42 +636,96 @@
 
 .diagrama__crud-cabecera {
   display: flex;
-}
-
-.diagrama__fila-formulario {
-  display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #ffffff;
 }
 
-.diagrama__fila-formulario--edicion {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-}
-
-.diagrama__ff-nombre {
-  flex: 1 1 180px;
-  min-width: 160px;
-}
-
-.diagrama__ff-formulario {
-  flex: 1 1 220px;
-  min-width: 200px;
-}
-
-.diagrama__ff-nombre-nombre {
-  flex: 1 1 180px;
-  min-width: 160px;
-}
-
-.diagrama__ff-visibilidad-texto {
+.diagrama__crud-contador {
   color: #64748b;
   font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.diagrama__tabla-formularios {
+  .ant-table-tbody > tr > td {
+    vertical-align: middle;
+  }
+}
+
+.diagrama__celda-nombre {
+  display: inline-block;
+  max-width: 100%;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.diagrama__celda-documento {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diagrama__celda-na {
+  color: #94a3b8;
+}
+
+.diagrama__acc-col {
+  text-align: center;
+
+  .ant-btn + .ant-btn {
+    margin-inline-start: 0.25rem;
+  }
+}
+
+.diagrama__crud-vacio {
+  padding: 1.5rem 0;
+}
+
+/* ====== Modal crear/editar y compartir formulario ====== */
+.diagrama__ff-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.diagrama__select-full {
+  width: 100%;
+}
+
+.diagrama__campo-requerido {
+  color: #e11d48;
+}
+
+.diagrama__campo-error-texto {
+  color: #dc2626;
+  font-size: 0.75rem;
+}
+
+.diagrama__campo-ayuda {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.diagrama__input-error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.08);
+}
+
+.diagrama__select-error {
+  .ant-select-selector {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.08);
+  }
 }
 
 /* ====== Fila dividida Formularios / Traspasos ====== */
@@ -810,4 +864,15 @@
 .diagrama__traspaso-flecha {
   text-align: center;
   color: #64748b;
+}
+
+// El modal "Diagrama asociado" se mantiene montado durante la sesión del
+// proceso: al "Listo" no se destruye, solo se oculta vía clase (el contenido
+// vive dentro del overlay CDK, por eso son estilos globales con ::ng-deep).
+::ng-deep .cdk-global-overlay-wrapper:has(.diagrama-modal--oculto) {
+  display: none !important;
+}
+
+::ng-deep .cdk-overlay-backdrop:has(+ .cdk-global-overlay-wrapper .diagrama-modal--oculto) {
+  display: none !important;
 }

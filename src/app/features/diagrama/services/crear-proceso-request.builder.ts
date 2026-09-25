@@ -5,21 +5,67 @@ import {
   BloqueMetadatoRequeridoRequest,
   CargoResponsableRequest,
   CrearProcesoRequest,
+  DatoRequeridoProcesoDatoRequest,
+  DatoRequeridoProcesoMetadatoRequest,
+  DatoRequeridoProcesoRequest,
   DocumentoComunActividadWrapperRequest,
   DocumentoComunProcesoWrapperRequest,
   MetadatoTransferidoRequest,
   ProcesoActivityTypeId,
   ProcesoMecanismoRequest,
   ProcesoRequest,
+  ReglaNegocioRequest,
+  ReglaUsuarioRequest,
+  TimerTransicionRequest,
   TransicionWrapperRequest,
 } from '../models/crear-proceso-request.model';
+import { DecisionConfig } from '../models/decision-config.model';
+import { ConfigDatoSelection, MecanismoProceso, ProcesoCompartido } from '../models/diagrama.model';
+import { TimerConfig } from '../models/timer-config.model';
+import {
+  TransicionConfig,
+  TransicionReglaNegocio,
+  TransicionReglaUsuario,
+  TRANSICION_OPERADOR_REGLAS,
+} from '../models/transicion-config.model';
 import {
   FormularioProcesoConfig,
   FormularioRequeridoSeleccion,
   MetadatoTransferidoDetalle,
-  ParColumnaTransferido,
   TareaConfig,
 } from '../models/tarea-config.model';
+
+export interface OpcionMetadatoResuelta {
+  readonly idMetadato: number;
+  readonly idBloque: number | null;
+  readonly codigoBloque: string | null;
+  readonly tipo: string | null;
+}
+
+export interface OpcionDocumentoProceso {
+  readonly label: string;
+  readonly value: string;
+}
+
+const PROCEDENCIA_DIAGRAMA = 'diagrama';
+
+export interface CrearProcesoRequestExtras {
+  readonly mecanismo?: MecanismoProceso | null;
+  readonly configDatoSelections?: Record<number, ConfigDatoSelection>;
+  readonly procesoCompartido?: ProcesoCompartido | null;
+  readonly transicionConfigs?: Record<string, TransicionConfig>;
+  readonly decisionConfigs?: Record<string, DecisionConfig>;
+  readonly resolverMetadato?: (
+    idDocumento: number,
+    clave: string,
+  ) => OpcionMetadatoResuelta | null;
+  readonly resolverMetadatoRol?: (
+    idRol: number | null,
+    idMetadato: number | null,
+  ) => OpcionMetadatoResuelta | null;
+  readonly documentosProceso?: readonly OpcionDocumentoProceso[];
+  readonly idPadre?: number | null;
+}
 
 export interface CrearProcesoFormSource {
   readonly nombre: string;
@@ -60,6 +106,13 @@ const ACTIVITY_TYPE_BY_TAG: Record<string, ProcesoActivityTypeId> = {
   'enlace-paralelo': 'enlaceParalelo',
   'end-state': 'finalizado',
   'terminate-state': 'finalizado',
+};
+
+const TIPO_TO_DATO_DISPONIBLE: Record<string, string> = {
+  texto_fijo: 'txf',
+  metadato_formulario: 'met',
+  correlativo: 'cor',
+  nombre_proceso: 'npr',
 };
 
 @Injectable({ providedIn: 'root' })
@@ -103,6 +156,7 @@ export class CrearProcesoRequestBuilder {
     usuarioCreador: string,
     tareaConfigs?: Record<string, TareaConfig>,
     formulariosProceso?: readonly FormularioProcesoConfig[],
+    extras?: CrearProcesoRequestExtras,
   ): CrearProcesoRequest {
     const parser = new DOMParser();
     const documentXml = parser.parseFromString(liveXml, 'text/xml');
@@ -113,18 +167,20 @@ export class CrearProcesoRequestBuilder {
 
     const documentosComunes = this.parseDocumentosComunes(processDefinition, formulariosProceso);
     const cargosResponsables = this.parseCargosResponsables(processDefinition);
-    const procesoMecanismo = this.parseProcesoMecanismo(processDefinition);
-    const actividades = this.parseActividades(processDefinition, tareaConfigs);
-    const transiciones = this.parseTransiciones(processDefinition);
+    const procesoMecanismo = this.parseProcesoMecanismo(processDefinition, extras);
+    const actividades = this.parseActividades(processDefinition, tareaConfigs, extras);
+    const transiciones = this.parseTransiciones(processDefinition, extras);
 
     const idDocumentoPublicar =
       documentosComunes.length > 0 ? documentosComunes[0].documentoComunProceso.idDocumento : -1;
+
+    const procesoCompartido = extras?.procesoCompartido ?? null;
 
     const proceso: ProcesoRequest = {
       processId: null,
       processName: form.nombre.trim(),
       version: this.parseNumber(processDefinition?.getAttribute('version') ?? '1', 1),
-      idPadre: -1,
+      idPadre: extras?.idPadre ?? -1,
       esUltimaVersion: true,
       path: liveXml,
       processDesc: null,
@@ -154,9 +210,11 @@ export class CrearProcesoRequestBuilder {
 
     return {
       proceso,
-      permisosUsuarios: [],
-      permisosRoles: [],
-      permisosGrupos: [],
+      permisosUsuarios: (procesoCompartido?.usuario ?? []).map((usuario) => ({
+        id_usuario: usuario.id_usuario,
+      })),
+      permisosRoles: (procesoCompartido?.cargo ?? []).map((cargo) => cargo.id_rol),
+      permisosGrupos: (procesoCompartido?.grupo ?? []).map((grupo) => grupo.id_grupo),
       rolesGenericosProceso: [],
       documentosComunes,
       cargosResponsables,
@@ -243,21 +301,96 @@ export class CrearProcesoRequestBuilder {
     }));
   }
 
-  private parseProcesoMecanismo(processDefinition: Element | undefined): ProcesoMecanismoRequest {
+  private parseProcesoMecanismo(
+    processDefinition: Element | undefined,
+    extras?: CrearProcesoRequestExtras,
+  ): ProcesoMecanismoRequest {
     const mecanismo = processDefinition?.getElementsByTagName('mecanismoDenominacion')[0];
-    const id = mecanismo
+    let id = mecanismo
       ? this.parseNumber(mecanismo.getAttribute('idMecanismoDenominacion') ?? '-1', -1)
       : -1;
 
+    if (id === -1 && extras?.mecanismo) {
+      id = extras.mecanismo.id_mecanismo_denominacion;
+    }
+
     return {
       idMecanismoDenominacion: id,
-      datosRequeridos: [],
+      datosRequeridos: this.buildDatosRequeridos(extras),
     };
+  }
+
+  private buildDatosRequeridos(
+    extras?: CrearProcesoRequestExtras,
+  ): readonly DatoRequeridoProcesoRequest[] {
+    const mecanismo = extras?.mecanismo;
+    if (!mecanismo) {
+      return [];
+    }
+
+    const selections = extras?.configDatoSelections ?? {};
+    const resolver = extras?.resolverMetadato;
+    const documentos = extras?.documentosProceso ?? [];
+    const datos: DatoRequeridoProcesoRequest[] = [];
+
+    for (const datoRequerido of mecanismo.datos_requeridos) {
+      if (datoRequerido.id_dato_mecanismo !== 'var') {
+        continue;
+      }
+
+      const seleccion = selections[datoRequerido.id_dato_req_mecanismo] ?? { tipo: '' };
+      if (seleccion.tipo === '') {
+        continue;
+      }
+
+      const esTextoFijo = seleccion.tipo === 'texto_fijo';
+      const esCorrelativo = seleccion.tipo === 'correlativo';
+      const dato: DatoRequeridoProcesoDatoRequest = {
+        idDatoReqProceso: null,
+        processId: null,
+        idDatoReqMecanismo: datoRequerido.id_dato_req_mecanismo,
+        idDatoDisponibleProceso: TIPO_TO_DATO_DISPONIBLE[seleccion.tipo] ?? '',
+        valorTextoFijo: esTextoFijo ? (seleccion.valor ?? '') : '',
+        nombreSecuencia: esCorrelativo ? (seleccion.secuencia ?? '') : '',
+      };
+
+      let metadatoRequerido: DatoRequeridoProcesoMetadatoRequest | null = null;
+      let nombreDocumentoComun: string | null = null;
+
+      if (seleccion.tipo === 'metadato_formulario') {
+        const idDocumento = Number(seleccion.documento ?? '-1');
+        const idMetadato = Number(seleccion.metadato ?? '-1');
+        const clave = this.claveMetadatoSeleccion(seleccion);
+        const resuelto = idDocumento > 0 ? (resolver?.(idDocumento, clave) ?? null) : null;
+
+        metadatoRequerido = {
+          idDatoReqProceso: null,
+          idDocumento,
+          idMetadato,
+          idBloque: resuelto?.idBloque ?? -1,
+          codigoBloque: seleccion.codigoBloque ?? resuelto?.codigoBloque ?? '',
+          docComunId: null,
+        };
+        nombreDocumentoComun =
+          documentos.find((opcion) => opcion.value === seleccion.documento)?.label ?? null;
+      }
+
+      datos.push({ dato, metadatoRequerido, nombreDocumentoComun });
+    }
+
+    return datos;
+  }
+
+  private claveMetadatoSeleccion(seleccion: ConfigDatoSelection): string {
+    return seleccion.codigoBloque !== undefined && seleccion.codigoBloque !== ''
+      ? `${seleccion.codigoBloque}-${seleccion.metadato}`
+      : String(seleccion.metadato);
   }
 
   private parseActividades(
     processDefinition: Element | undefined,
     tareaConfigs?: Record<string, TareaConfig>,
+    extras?: CrearProcesoRequestExtras,
   ): ActividadWrapperRequest[] {
     if (!processDefinition) {
       return [];
@@ -271,59 +404,29 @@ export class CrearProcesoRequestBuilder {
       for (const nodo of nodos) {
         const idElemento = nodo.getAttribute('id') ?? '';
         const activitytypeId = ACTIVITY_TYPE_BY_TAG[tagName] ?? 'tarea';
+        const idElementoBpmn = this.normalizarId(idElemento);
 
-        const actividad: ActividadRequest = {
-          activityId: null,
-          activityName: nodo.getAttribute('name') ?? '',
-          activitytypeId,
-          priorityId: 3,
-          activityDesc: null,
-          activityTime: 0,
-          timeunitId: 'minutos',
-          stage: 0,
-          processId: null,
-          funcionality: null,
-          cantidadDocumentos: 0,
-          adjuntarDocumento: false,
-          idJornada: 0,
-          idCalendario: 0,
-          idRol: -1,
-          minimoEjecutores: 0,
-          cualquierUsuario: false,
-          idElemento,
-          tieneDocumentosComunes: false,
-          validacionJerarquica: false,
-          tieneCheckpoint: false,
-          nombreCheckpoint: '',
-          porcentajeAvance: 0,
-          etapaOrden: 0,
-          tieneAlertas: false,
-          imprimeFormulario: false,
-          tareaWeb: false,
-          filtrarPorMetadato: false,
-          registrosExternos: false,
-          tieneNotificacion: false,
-          consecutiva: false,
-          automatica: false,
-          conservarVistosBuenos: false,
-          esTimer: false,
-          utilizaAgenda: false,
-          dispositivoMovil: false,
-          tareaExternaCreaUsuario: null,
-          tieneDestinatarioExterno: null,
-          esConfiguracion: false,
-        };
+        const configTarea = activitytypeId === 'tarea' ? this.buscarConfig(tareaConfigs, idElemento) : undefined;
+        const decisionConfig =
+          activitytypeId === 'decision' ? (extras?.decisionConfigs?.[idElementoBpmn] ?? null) : null;
 
-        const configTarea = activitytypeId === 'tarea' ? tareaConfigs?.[idElemento] : undefined;
+        const actividad = this.construirActividad(nodo, activitytypeId, idElemento, configTarea, decisionConfig);
+
+        const seleccionTarea = configTarea?.formularioRequeridoSeleccionado ?? null;
         const documentosComunesActividad =
           configTarea !== undefined
-            ? this.buildDocumentosComunesActividad(configTarea.formularioRequeridoSeleccionado)
-            : this.parseDocumentosComunesActividad(nodo);
+            ? this.buildDocumentosComunesActividad(seleccionTarea, extras)
+            : activitytypeId === 'decision' && decisionConfig?.documento !== null && decisionConfig?.documento !== undefined
+              ? this.buildDocumentosComunesActividadDecision(decisionConfig, extras)
+              : this.parseDocumentosComunesActividad(nodo, extras);
 
         actividades.push({
           actividad,
           rolesGenericos: [],
-          usuariosPreAsignados: [],
+          usuariosPreAsignados: (configTarea?.usuarios ?? []).map((usuario) => ({
+            idUsuario: usuario,
+            idProcedencia: PROCEDENCIA_DIAGRAMA,
+          })),
           rolesPreAsignados: [],
           documentosComunesActividad,
           elementosRequeridos: [],
@@ -337,14 +440,163 @@ export class CrearProcesoRequestBuilder {
     return actividades;
   }
 
+  private buscarConfig(
+    configs: Record<string, TareaConfig> | undefined,
+    idElemento: string,
+  ): TareaConfig | undefined {
+    if (!configs) {
+      return undefined;
+    }
+
+    return configs[idElemento] ?? configs[this.normalizarId(idElemento)];
+  }
+
+  private normalizarId(id: string): string {
+    return id.replace(/ /g, '_');
+  }
+
+  private construirActividad(
+    nodo: Element,
+    activitytypeId: ProcesoActivityTypeId,
+    idElemento: string,
+    configTarea: TareaConfig | undefined,
+    decisionConfig: DecisionConfig | null,
+  ): ActividadRequest {
+    const config =
+      configTarea ??
+      (decisionConfig !== null ? this.tareaConfigDesdeDecision(decisionConfig) : undefined);
+
+    const overrides =
+      config === undefined
+        ? {}
+        : {
+            activityTime: config.duracionValor ?? 0,
+            timeunitId: config.duracionUnidad ?? 'minutos',
+            funcionality:
+              config.ejecutaFuncionalidad && config.funcionalidad !== null
+                ? config.funcionalidad
+                : null,
+            idRol: config.cargo !== null ? Number(config.cargo) : -1,
+            idJornada:
+              config.aplicarJornadaLaboral && config.jornada !== null ? Number(config.jornada) : -1,
+            idCalendario:
+              config.aplicarJornadaLaboral && config.calendario !== null
+                ? Number(config.calendario)
+                : -1,
+            tieneDocumentosComunes:
+              config.formularioRequeridoSeleccionado !== null &&
+              config.formularioRequeridoSeleccionado.idFormulario !== 0,
+            tieneCheckpoint: config.checkpoint,
+            tieneAlertas: config.alertas,
+            imprimeFormulario: config.imprimirFormulario,
+            tareaWeb: config.tareaWeb,
+            filtrarPorMetadato: config.filtrarUsuariosPorMetadatos,
+            registrosExternos: config.agregarRegistrosExternos,
+            tieneNotificacion: config.notificarViaEmail,
+            consecutiva: config.tipoEjecucion === 'consecutiva',
+            automatica: config.tipoEjecucion === 'automatica',
+            conservarVistosBuenos: config.conservarVistosBuenos,
+            utilizaAgenda: config.agenda,
+            dispositivoMovil: config.dispositivoMovil,
+          };
+
+    return {
+      activityId: null,
+      activityName: nodo.getAttribute('name') ?? '',
+      activitytypeId,
+      priorityId: 3,
+      activityDesc: null,
+      activityTime: 0,
+      timeunitId: 'minutos',
+      stage: 0,
+      processId: null,
+      funcionality: null,
+      cantidadDocumentos: 0,
+      adjuntarDocumento: false,
+      idJornada: 0,
+      idCalendario: 0,
+      idRol: -1,
+      minimoEjecutores: 0,
+      cualquierUsuario: false,
+      idElemento,
+      tieneDocumentosComunes: false,
+      validacionJerarquica: false,
+      tieneCheckpoint: false,
+      nombreCheckpoint: '',
+      porcentajeAvance: 0,
+      etapaOrden: 0,
+      tieneAlertas: false,
+      imprimeFormulario: false,
+      tareaWeb: false,
+      filtrarPorMetadato: false,
+      registrosExternos: false,
+      tieneNotificacion: false,
+      consecutiva: false,
+      automatica: false,
+      conservarVistosBuenos: false,
+      esTimer: activitytypeId === 'timer',
+      utilizaAgenda: false,
+      dispositivoMovil: false,
+      tareaExternaCreaUsuario: null,
+      tieneDestinatarioExterno: null,
+      esConfiguracion: false,
+      ...overrides,
+    };
+  }
+
+  private tareaConfigDesdeDecision(config: DecisionConfig): TareaConfig {
+    return {
+      ...config,
+      observaciones: '',
+      ignorarValidacionCargo: false,
+      agenda: false,
+      checkpoint: false,
+      agregarRegistrosExternos: false,
+      filtrarUsuariosPorMetadatos: false,
+      imprimirFormulario: false,
+      tareaWeb: false,
+      conservarVistosBuenos: false,
+      formularioRequeridoSeleccionado: null,
+    };
+  }
+
+  private buildDocumentosComunesActividadDecision(
+    decisionConfig: DecisionConfig,
+    extras?: CrearProcesoRequestExtras,
+  ): DocumentoComunActividadWrapperRequest[] {
+    if (decisionConfig.documento === null || decisionConfig.documento === 0) {
+      return [];
+    }
+
+    const nombre = this.labelDocumentoProceso(String(decisionConfig.documento), extras);
+
+    return [
+      {
+        nombreDocComunProceso: nombre,
+        documentoComunActividad: {
+          id: { activityId: null, docComunId: null },
+          tieneMetadatosTransferidos: 'false',
+        },
+        metadatosDisponibles: [],
+        reglaMultiFormulario: null,
+        metadatosTransferidos: [],
+      },
+    ];
+  }
+
+  private labelDocumentoProceso(idDocumento: string, extras?: CrearProcesoRequestExtras): string {
+    return extras?.documentosProceso?.find((opcion) => opcion.value === idDocumento)?.label ?? '';
+  }
+
   private buildDocumentosComunesActividad(
     seleccion: FormularioRequeridoSeleccion | null | undefined,
+    extras?: CrearProcesoRequestExtras,
   ): DocumentoComunActividadWrapperRequest[] {
     if (!seleccion || seleccion.idFormulario === 0) {
       return [];
     }
 
-    const metadatosTransferidos = this.buildMetadatosTransferidos(seleccion);
+    const metadatosTransferidos = this.buildMetadatosTransferidos(seleccion, extras);
 
     return [
       {
@@ -356,81 +608,88 @@ export class CrearProcesoRequestBuilder {
               ? 'true'
               : 'false',
         },
-        metadatosDisponibles: seleccion.metadatosSeleccionados.map((clave) => ({
-          id: {
-            activityId: null,
-            docComunId: null,
-            idDocumento: seleccion.idFormulario,
-            idMetadato: Number(clave.split('-').pop()),
-            idBloque: -1,
-          },
-        })),
+        metadatosDisponibles: seleccion.metadatosSeleccionados.map((clave) => {
+          const resuelto = extras?.resolverMetadato?.(seleccion.idFormulario, clave) ?? null;
+
+          return {
+            id: {
+              activityId: null,
+              docComunId: null,
+              idDocumento: seleccion.idFormulario,
+              idMetadato: resuelto?.idMetadato ?? this.parseIdMetadatoDeClave(clave),
+              idBloque: resuelto?.idBloque ?? -1,
+            },
+            codigoBloque:
+              resuelto?.codigoBloque ?? (this.codigoBloqueDeClave(clave) ?? ''),
+          };
+        }),
         reglaMultiFormulario: null,
         metadatosTransferidos,
       },
     ];
   }
 
-  private buildMetadatosTransferidos(
-    seleccion: FormularioRequeridoSeleccion,
-  ): readonly MetadatoTransferidoRequest[] {
-    return (seleccion.metadatosTransferidos ?? []).map((traspaso) => ({
-      documentoComunProceso: {
-        idDocumentoComunProceso: null,
-        compartido: seleccion.visibilidad === 'publico' ? 'true' : 'false',
-        nombreDocumentoProceso: seleccion.nombre,
-        nombreDocumento: seleccion.nombreDocumento || seleccion.nombre,
-        privado: seleccion.visibilidad === 'privado' ? 'true' : 'false',
-        idDocumento: seleccion.idFormulario,
-      },
-      bloqueMetadatoRequeridoOrigen: this.buildBloqueMetadatoRequerido(traspaso.origen),
-      bloqueMetadatoRequeridoDestino: this.buildBloqueMetadatoRequerido(
-        traspaso.destino,
-        traspaso.paresColumnas,
-      ),
-    }));
+  private parseIdMetadatoDeClave(clave: string): number {
+    return Number(clave.split('-').pop());
   }
 
-  private buildBloqueMetadatoRequerido(
-    detalle: MetadatoTransferidoDetalle,
-    paresColumnas?: readonly ParColumnaTransferido[],
-  ): BloqueMetadatoRequeridoRequest {
-    const bloqueMetadato = {
-      nombreBloque: detalle.nombreBloque,
-      codigoBloque: detalle.codigoBloque,
-    };
+  private codigoBloqueDeClave(clave: string): string | null {
+    const indiceSeparador = clave.lastIndexOf('-');
 
-    if (!detalle.esGrilla || paresColumnas === undefined || paresColumnas.length === 0) {
+    return indiceSeparador > 0 ? clave.slice(0, indiceSeparador) : null;
+  }
+
+  private buildMetadatosTransferidos(
+    seleccion: FormularioRequeridoSeleccion,
+    extras?: CrearProcesoRequestExtras,
+  ): readonly MetadatoTransferidoRequest[] {
+    return (seleccion.metadatosTransferidos ?? []).map((traspaso) => {
+      const origen = this.mapearDetalleTransferidoPlano(traspaso.origen, extras);
+      const destino = this.mapearDetalleTransferidoPlano(traspaso.destino, extras);
+
       return {
-        metadatoRequerido: {
-          nombreMetadato: detalle.nombreMetadato,
-          esGrilla: detalle.esGrilla ? 'true' : 'false',
-          idMetadato: detalle.idMetadato,
-          idTipoDato: detalle.tipoMetadato,
-        },
-        bloqueMetadato,
+        metadatoTransferidoId: null,
+        activityId: null,
+        nombreDocComunOrigen: traspaso.origen.nombreFormulario,
+        docComunIdOrigen: null,
+        idDocumentoOrigen: traspaso.origen.idFormulario,
+        idMetadatoOrigen: origen.idMetadato,
+        idBloqueOrigen: origen.idBloque,
+        codigoBloqueOrigen: origen.codigoBloque,
+        docComunIdDestino: null,
+        idDocumentoDestino: traspaso.destino.idFormulario,
+        idMetadatoDestino: destino.idMetadato,
+        idBloqueDestino: destino.idBloque,
+        codigoBloqueDestino: destino.codigoBloque,
+        ...(destino.esGrilla && traspaso.paresColumnas !== undefined
+          ? { columnasTransferidasDestino: traspaso.paresColumnas.map((par) => ({
+              idColumnaOrigen: par.origen.idColumnaGrilla,
+              dataFieldOrigen: par.origen.datafield,
+              idColumnaDestino: par.destino.idColumnaGrilla,
+              dataFieldDestino: par.destino.datafield,
+            })) }
+          : {}),
       };
-    }
+    });
+  }
+
+  private mapearDetalleTransferidoPlano(
+    detalle: MetadatoTransferidoDetalle,
+    extras?: CrearProcesoRequestExtras,
+  ): { idMetadato: number; idBloque: number | null; codigoBloque: string | null; esGrilla: boolean } {
+    const resuelto = extras?.resolverMetadato?.(detalle.idFormulario, detalle.clave) ?? null;
 
     return {
-      metadatoRequerido: {
-        nombreMetadato: detalle.nombreMetadato,
-        esGrilla: 'true',
-        idMetadato: detalle.idMetadato,
-        idTipoDato: detalle.tipoMetadato,
-        columnasTransferidas: paresColumnas.map((par) => ({
-          idColumnaOrigen: par.origen.idColumnaGrilla,
-          dataFieldOrigen: par.origen.datafield,
-          idColumnaDestino: par.destino.idColumnaGrilla,
-          dataFieldDestino: par.destino.datafield,
-        })),
-      },
-      bloqueMetadato,
+      idMetadato: detalle.idMetadato,
+      idBloque: resuelto?.idBloque ?? -1,
+      codigoBloque: detalle.codigoBloque ?? resuelto?.codigoBloque ?? null,
+      esGrilla: detalle.esGrilla,
     };
   }
 
   private parseDocumentosComunesActividad(
     nodo: Element,
+    extras?: CrearProcesoRequestExtras,
   ): DocumentoComunActividadWrapperRequest[] {
     const contenedor = nodo.getElementsByTagName('documentosComunesActividad')[0];
     if (!contenedor) {
@@ -458,8 +717,9 @@ export class CrearProcesoRequestBuilder {
                 docComunId: null,
                 idDocumento: this.parseNumber(idNodo.getAttribute('idDocumento') ?? '-1', -1),
                 idMetadato: this.parseNumber(idNodo.getAttribute('idMetadato') ?? '-1', -1),
-                idBloque: this.parseNumber(idNodo.getAttribute('idBloque') ?? '-1', -1),
+                idBloque: this.parsearNumeroOpcional(idNodo.getAttribute('idBloque')) ?? -1,
               },
+              codigoBloque: idNodo.getAttribute('codigoBloque') ?? '',
             }))
           : [],
         reglaMultiFormulario: null,
@@ -479,28 +739,37 @@ export class CrearProcesoRequestBuilder {
       (nodoTransferido) => {
         const documentoComunProceso =
           nodoTransferido.getElementsByTagName('documentoComunProceso')[0];
+        const bloqueOrigen = nodoTransferido.getElementsByTagName('bloqueMetadatoRequeridoOrigen')[0];
+        const bloqueDestino = nodoTransferido.getElementsByTagName('bloqueMetadatoRequeridoDestino')[0];
+        const origen = this.parseBloqueMetadatoRequerido(bloqueOrigen);
+        const destino = this.parseBloqueMetadatoRequerido(bloqueDestino);
+        const idDocumento = this.parseNumber(
+          documentoComunProceso?.getAttribute('idDocumento') ?? '-1',
+          -1,
+        );
 
         return {
-          documentoComunProceso: {
-            idDocumentoComunProceso: this.parsearNumeroOpcional(
-              documentoComunProceso?.getAttribute('idDocumentoComunProceso') ?? null,
-            ),
-            compartido: documentoComunProceso?.getAttribute('compartido') ?? 'false',
-            nombreDocumentoProceso:
-              documentoComunProceso?.getAttribute('nombreDocumentoProceso') ?? '',
-            nombreDocumento: documentoComunProceso?.getAttribute('nombreDocumento') ?? '',
-            privado: documentoComunProceso?.getAttribute('privado') ?? 'true',
-            idDocumento: this.parseNumber(
-              documentoComunProceso?.getAttribute('idDocumento') ?? '-1',
-              -1,
-            ),
-          },
-          bloqueMetadatoRequeridoOrigen: this.parseBloqueMetadatoRequerido(
-            nodoTransferido.getElementsByTagName('bloqueMetadatoRequeridoOrigen')[0],
+          metadatoTransferidoId: this.parsearNumeroOpcional(
+            nodoTransferido.getAttribute('metadatoTransferidoId') ?? null,
           ),
-          bloqueMetadatoRequeridoDestino: this.parseBloqueMetadatoRequerido(
-            nodoTransferido.getElementsByTagName('bloqueMetadatoRequeridoDestino')[0],
+          activityId: null,
+          nombreDocComunOrigen:
+            documentoComunProceso?.getAttribute('nombreDocumentoProceso') ?? '',
+          docComunIdOrigen: this.parsearNumeroOpcional(
+            documentoComunProceso?.getAttribute('docComunIdOrigen') ?? null,
           ),
+          idDocumentoOrigen: idDocumento,
+          idMetadatoOrigen: origen.metadatoRequerido.idMetadato,
+          idBloqueOrigen: origen.bloqueMetadato.idBloque ?? -1,
+          codigoBloqueOrigen: origen.bloqueMetadato.codigoBloque,
+          docComunIdDestino: null,
+          idDocumentoDestino: idDocumento,
+          idMetadatoDestino: destino.metadatoRequerido.idMetadato,
+          idBloqueDestino: destino.bloqueMetadato.idBloque ?? -1,
+          codigoBloqueDestino: destino.bloqueMetadato.codigoBloque,
+          ...(destino.metadatoRequerido.columnasTransferidas
+            ? { columnasTransferidasDestino: destino.metadatoRequerido.columnasTransferidas }
+            : {}),
         };
       },
     );
@@ -531,6 +800,7 @@ export class CrearProcesoRequestBuilder {
       bloqueMetadato: {
         nombreBloque: bloqueMetadato?.getAttribute('nombreBloque') ?? null,
         codigoBloque: bloqueMetadato?.getAttribute('codigoBloque') ?? null,
+        idBloque: this.parsearNumeroOpcional(bloqueMetadato?.getAttribute('idBloque') ?? null),
       },
     };
   }
@@ -545,11 +815,15 @@ export class CrearProcesoRequestBuilder {
     return Number.isFinite(numero) ? numero : null;
   }
 
-  private parseTransiciones(processDefinition: Element | undefined): TransicionWrapperRequest[] {
+  private parseTransiciones(
+    processDefinition: Element | undefined,
+    extras?: CrearProcesoRequestExtras,
+  ): TransicionWrapperRequest[] {
     if (!processDefinition) {
       return [];
     }
 
+    const transicionConfigs = extras?.transicionConfigs ?? {};
     const transiciones: TransicionWrapperRequest[] = [];
 
     for (const tagName of LEGACY_FLOW_TAGS) {
@@ -561,6 +835,12 @@ export class CrearProcesoRequestBuilder {
 
         for (const transicion of transicionesNodo) {
           const idDestino = transicion.getAttribute('to') ?? '';
+          const idTransicionXml = transicion.getAttribute('id') ?? '';
+          const config =
+            transicionConfigs[idTransicionXml] ??
+            transicionConfigs[this.normalizarId(idTransicionXml)] ??
+            null;
+          const requiereTimer = config?.requiereTimer === true;
 
           transiciones.push({
             transicion: {
@@ -571,22 +851,156 @@ export class CrearProcesoRequestBuilder {
               processId: null,
               transitiontypeId: null,
               idAccionTransicion: null,
-              tieneTimer: transicion.getAttribute('esTimer') === 'true',
+              tieneTimer: requiereTimer || transicion.getAttribute('esTimer') === 'true',
               levantaForm: transicion.getAttribute('levantaFormulario') === 'true',
             },
             idActividadOrigen: idOrigen,
             idActividadDestino: idDestino,
-            reglasUsuario: [],
-            reglasNegocio: [],
-            tieneTimer: null,
-            timer: null,
-            conInterrupcion: null,
+            reglasUsuario: (config?.reglasUsuario ?? []).map((regla) =>
+              this.buildReglaUsuarioPlana(regla, extras),
+            ),
+            reglasNegocio: (config?.reglasNegocio ?? []).map((regla) =>
+              this.buildReglaNegocioPlana(regla, extras),
+            ),
+            tieneTimer: requiereTimer && config !== null ? true : null,
+            timer: requiereTimer && config !== null
+              ? this.buildTimerTransicion(config.timer, extras)
+              : null,
+            conInterrupcion: requiereTimer && config !== null ? config.interrupcion : null,
           });
         }
       }
     }
 
     return transiciones;
+  }
+
+  private buildReglaUsuarioPlana(
+    regla: TransicionReglaUsuario,
+    extras?: CrearProcesoRequestExtras,
+  ): ReglaUsuarioRequest {
+    const idDocumento = regla.idDocumento ?? null;
+    const idMetIzqClave = regla.idMetadato ?? null;
+    const izquierda =
+      idDocumento !== null && idMetIzqClave !== null
+        ? (extras?.resolverMetadato?.(idDocumento, idMetIzqClave) ?? null)
+        : null;
+    const idMetadatoValor = regla.idMetadatoValor ?? null;
+    const derecho =
+      extras?.resolverMetadatoRol?.(
+        regla.idCargo ?? null,
+        this.parsearNumeroOpcional(idMetadatoValor),
+      ) ?? null;
+    const idMetDer = this.parsearNumeroOpcional(idMetadatoValor);
+
+    return {
+      idReglaUsuario: regla.idReglaUsuario ?? null,
+      idDocIzq: idDocumento,
+      idBloqIzq: izquierda?.idBloque ?? -1,
+      codigoBloqIzq: izquierda?.codigoBloque ?? null,
+      idMetIzq: izquierda?.idMetadato ?? (idMetIzqClave !== null ? this.parseIdMetadatoDeClave(idMetIzqClave) : null),
+      idRolDer: regla.idCargo ?? null,
+      idBloqDer: derecho?.idBloque ?? -1,
+      codigoBloqDer: derecho?.codigoBloque ?? null,
+      idMetDer,
+      campoValor2: regla.interpretacion === 'id',
+    };
+  }
+
+  private buildReglaNegocioPlana(
+    regla: TransicionReglaNegocio,
+    extras?: CrearProcesoRequestExtras,
+  ): ReglaNegocioRequest {
+    const idDocumento = regla.idDocumento ?? null;
+    const idMetIzqClave = regla.idMetadato ?? null;
+    const izquierda =
+      idDocumento !== null && idMetIzqClave !== null
+        ? (extras?.resolverMetadato?.(idDocumento, idMetIzqClave) ?? null)
+        : null;
+
+    const esOtroMetadato = regla.fuenteValor === 'otroMetadato';
+    const idMetDerClave = regla.idMetadatoValor ?? null;
+    const derecho =
+      esOtroMetadato && regla.idDocumentoValor !== null && idMetDerClave !== null
+        ? (extras?.resolverMetadato?.(regla.idDocumentoValor, idMetDerClave) ?? null)
+        : null;
+
+    return {
+      idReglaNegocio: null,
+      idOperadorRegla: regla.idOperadorRegla ?? this.buscarIdOperadorRegla(izquierda?.tipo ?? null, regla.operador),
+      izqEsDoc: false,
+      izqIdMetadato: izquierda?.idMetadato ?? (idMetIzqClave !== null ? this.parseIdMetadatoDeClave(idMetIzqClave) : null),
+      izqIdBloque: izquierda?.idBloque ?? -1,
+      izqCodigoBloque: izquierda?.codigoBloque ?? null,
+      izqIdTipoDato: izquierda?.tipo ?? null,
+      izqIdOperando: null,
+      derEsDoc: esOtroMetadato,
+      derIdMetadato: esOtroMetadato
+        ? (derecho?.idMetadato ?? (idMetDerClave !== null ? this.parseIdMetadatoDeClave(idMetDerClave) : null))
+        : null,
+      derIdBloque: esOtroMetadato ? (derecho?.idBloque ?? -1) : null,
+      derCodigoBloque: esOtroMetadato ? (derecho?.codigoBloque ?? null) : null,
+      derIdTipoDato: esOtroMetadato ? (derecho?.tipo ?? null) : null,
+      derIdOperando: null,
+      derValorOperando: esOtroMetadato ? null : regla.valorTexto,
+    };
+  }
+
+  private buscarIdOperadorRegla(tipo: string | null, operador: string): string | null {
+    if (tipo === null) {
+      return null;
+    }
+
+    return (
+      TRANSICION_OPERADOR_REGLAS.find(
+        (item) => item.tipo === tipo && item.operador === operador,
+      )?.idOperadorRegla ?? null
+    );
+  }
+
+  private buildTimerTransicion(
+    timer: TimerConfig,
+    extras?: CrearProcesoRequestExtras,
+  ): TimerTransicionRequest {
+    if (timer.modo === 'metadatoFormulario') {
+      const resuelto =
+        timer.idDocumento !== null && timer.idMetadato !== null
+          ? (extras?.resolverMetadato?.(timer.idDocumento, timer.idMetadato) ?? null)
+          : null;
+      const idMetadato = timer.idMetadato !== null ? this.parseIdMetadatoDeClave(timer.idMetadato) : null;
+
+      return {
+        idTimerProceso: null,
+        esMetFormulario: true,
+        docComunId: null,
+        idBloque: resuelto?.idBloque ?? -1,
+        idMetadato,
+        esDatoFijo: false,
+        esTiempo: false,
+        datoFijo: '0',
+        idUnidadTiempo: '',
+        esFecha: false,
+        fecha: '',
+        hora: '',
+      };
+    }
+
+    const esTiempo = timer.datoFijoTipo === 'tiempo';
+
+    return {
+      idTimerProceso: null,
+      esMetFormulario: false,
+      docComunId: null,
+      idBloque: null,
+      idMetadato: null,
+      esDatoFijo: true,
+      esTiempo,
+      datoFijo: esTiempo ? String(timer.duracionValor ?? 0) : '0',
+      idUnidadTiempo: esTiempo ? (timer.duracionUnidad ?? '') : '',
+      esFecha: !esTiempo,
+      fecha: esTiempo ? '' : (timer.fecha ?? ''),
+      hora: esTiempo ? '' : (timer.hora ?? ''),
+    };
   }
 
   private parseNumber(valor: string, defecto: number): number {

@@ -28,6 +28,7 @@ import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzModalModule } from 'ng-zorro-antd/modal';
+import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzTableModule, NzTableQueryParams } from 'ng-zorro-antd/table';
@@ -58,12 +59,17 @@ import {
   GrillaMetadatoColumna,
   GrillaMetadatoInfo,
   ProcesoCompartido,
+  LegacyBpmnSnapshot,
 } from './models/diagrama.model';
 import { ResultadoValidacionDiagrama } from './models/validacion-diagrama.model';
 import { validarDiagrama } from './services/validador-diagrama';
 import { BpmnBasePreviewComponent } from './components/bpmn-base-preview.component';
 import { BpmnAdapterService } from './services/bpmn-adapter.service';
-import { CrearProcesoRequestBuilder } from './services/crear-proceso-request.builder';
+import {
+  CrearProcesoRequestBuilder,
+  type CrearProcesoRequestExtras,
+  type OpcionMetadatoResuelta,
+} from './services/crear-proceso-request.builder';
 import {
   construirDecisionConfigDesdeActividad,
   construirMensajeConfigDesdeActividad,
@@ -91,6 +97,8 @@ import {
   TAREA_FUNCIONALIDAD_OPTIONS,
   TAREA_FORMULARIO_VISIBILIDAD_OPTIONS,
   TAREA_TIPO_EJECUCION_OPTIONS,
+  FormularioVisibilidad,
+  FormularioCompartido,
   FormularioProcesoConfig,
   FormularioRequeridoSeleccion,
   MetadatoTransferidoConfig,
@@ -173,6 +181,40 @@ function labelMetadatoConBloque(
   const bloque = nombreBloque?.trim() || codigoBloque?.trim() || '';
 
   return bloque !== '' ? `${bloque} | ${nombreMetadato}` : nombreMetadato;
+}
+
+function idCompartidoDesdeBackend(valor: unknown, clave: string): string {
+  if (typeof valor === 'number') {
+    return String(valor);
+  }
+  if (typeof valor === 'string') {
+    return valor;
+  }
+  if (valor !== null && typeof valor === 'object' && clave in valor) {
+    return String((valor as Record<string, unknown>)[clave]);
+  }
+
+  return '';
+}
+
+function mapearCompartidoDesdeBackend(
+  doc: DocumentoComunProceso,
+): FormularioCompartido | undefined {
+  const grupo = (doc.permisosGrupos ?? [])
+    .map((p) => idCompartidoDesdeBackend(p, 'id_grupo'))
+    .filter((v) => v !== '');
+  const cargo = (doc.permisosRoles ?? [])
+    .map((p) => idCompartidoDesdeBackend(p, 'id_rol'))
+    .filter((v) => v !== '');
+  const usuario = (doc.permisosUsuarios ?? [])
+    .map((p) => idCompartidoDesdeBackend(p, 'id_usuario'))
+    .filter((v) => v !== '');
+
+  if (grupo.length === 0 && cargo.length === 0 && usuario.length === 0) {
+    return undefined;
+  }
+
+  return { grupo, cargo, usuario };
 }
 
 function parsearFechaTimer(valor: string): Date | null {
@@ -275,6 +317,7 @@ const FLAGS_TRANSICION_VACIOS: TransicionFlags = {
 const DEFAULT_ROLE_IDS: readonly number[] = [1];
 const DEFAULT_PAGE_INDEX = 1;
 const DEFAULT_PAGE_SIZE = 10;
+const USUARIO_CREADOR_PROCESO = 'soportemovilgo';
 const DATO_DISPONIBLE_PROCESO_TO_TIPO: Record<string, string> = {
   txf: 'texto_fijo',
   met: 'metadato_formulario',
@@ -318,6 +361,7 @@ const MODAL_FORM_DEFAULTS: ProcesoModalFormValue = {
     NzIconModule,
     NzInputModule,
     NzModalModule,
+    NzPopconfirmModule,
     NzRadioModule,
     NzDatePickerModule,
     NzTimePickerModule,
@@ -376,7 +420,9 @@ export class DiagramaComponent {
   protected readonly procesoEditId = signal<number | null>(null);
   protected readonly procesoEditSourceXml = signal('');
   protected readonly procesoDiagramModalVisible = signal(false);
+  protected readonly procesoDiagramaMontadoVisible = signal(false);
   protected readonly procesoDiagramTouched = signal(false);
+  protected readonly procesoDiagramaXmlBase = signal('');
   protected readonly diagramaElementoModalVisible = signal(false);
   protected readonly diagramaElementoSeleccionado = signal<BpmnElementoInfo | null>(null);
   protected readonly diagramaElementoNombreInput = signal('');
@@ -399,9 +445,20 @@ export class DiagramaComponent {
 
   protected readonly seleccionMetadatosModalAbierto = signal(false);
   protected readonly crudFormulariosModalAbierto = signal(false);
-  protected readonly filaFormularioEditandoId = signal<string | null>(null);
   protected readonly documentosLivianoOptions = signal<readonly SelectOption[]>([]);
+  protected readonly documentosLivianoCargando = signal(false);
   protected readonly formulariosProceso = signal<readonly FormularioProcesoConfig[]>([]);
+  protected readonly formularioEditModalAbierto = signal(false);
+  protected readonly formularioEditId = signal<string | null>(null);
+  protected readonly formularioEditNombre = signal('');
+  protected readonly formularioEditDocumentoValor = signal<string | null>(null);
+  protected readonly formularioEditVisibilidad = signal<FormularioVisibilidad>('privado');
+  protected readonly formularioEditEnviado = signal(false);
+  protected readonly formularioCompartirModalAbierto = signal(false);
+  protected readonly formularioCompartirId = signal<string | null>(null);
+  protected readonly formCompartirGrupo = signal<readonly string[]>([]);
+  protected readonly formCompartirCargo = signal<readonly string[]>([]);
+  protected readonly formCompartirUsuario = signal<readonly string[]>([]);
   protected readonly formularioSeleccionadoId = signal<string | null>(null);
   protected readonly metadatosTrabajo = signal<readonly string[]>([]);
   protected readonly traspasosModalAbierto = signal(false);
@@ -2006,6 +2063,9 @@ export class DiagramaComponent {
     this.procesoEditId.set(null);
     this.procesoEditSourceXml.set('');
     this.procesoDiagramTouched.set(false);
+    this.procesoDiagramaMontadoVisible.set(false);
+    this.procesoDiagramModalVisible.set(false);
+    this.procesoDiagramaXmlBase.set('');
     this.procesoMecanismoError.set('');
     this.procesoAdvertenciaEjecucion.set('');
     this.procesoValidacionError.set([]);
@@ -2034,6 +2094,9 @@ export class DiagramaComponent {
     this.procesoEditId.set(row.id_proceso);
     this.procesoEditSourceXml.set(row.xml ?? '');
     this.procesoDiagramTouched.set(false);
+    this.procesoDiagramaMontadoVisible.set(false);
+    this.procesoDiagramModalVisible.set(false);
+    this.procesoDiagramaXmlBase.set(row.xml ?? '');
     this.procesoMecanismoError.set('');
     this.procesoValidacionError.set([]);
 
@@ -2079,21 +2142,43 @@ export class DiagramaComponent {
   protected onCerrarProcesoModal(): void {
     this.procesoModalVisible.set(false);
     this.procesoDiagramModalVisible.set(false);
+    this.procesoDiagramaMontadoVisible.set(false);
     this.procesoValidacionError.set([]);
   }
 
   protected onAbrirDiagramaAsociadoModal(): void {
+    this.procesoDiagramaMontadoVisible.set(true);
     this.procesoDiagramModalVisible.set(true);
   }
 
+  protected diagramaModalClase(): string {
+    return this.procesoDiagramModalVisible()
+      ? 'diagrama-modal'
+      : 'diagrama-modal diagrama-modal--oculto';
+  }
+
+  private snapshotDiagramaActual(): LegacyBpmnSnapshot | null {
+    return this.procesoDiagramaPreview?.obtenerSnapshot() ?? null;
+  }
+
+  private construirTemplateXmlProceso(formValue: ProcesoModalFormValue, usuarioCreador: string): string {
+    return this.procesoEditSourceXml() !== ''
+      ? this.procesoEditSourceXml()
+      : this.crearProcesoRequestBuilder.buildLegacyTemplateXml(formValue, usuarioCreador);
+  }
+
+  private async resolverLiveXmlProceso(templateXml: string): Promise<string> {
+    return (await this.procesoDiagramaPreview?.exportLegacyXml(templateXml)) ?? templateXml;
+  }
+
   protected validarDiagramaAsociado(): readonly ResultadoValidacionDiagrama[] {
-    if (this.procesoDiagramaPreview === undefined) {
-      // El visor no está montado (modal de diagrama nunca abierto en esta sesión):
-      // no hay snapshot que validar; se evitan falsos "sin evento de inicio/fin".
+    const snapshot = this.snapshotDiagramaActual();
+    if (snapshot === null) {
+      // Sin visor montado (modal de diagrama nunca abierto en esta sesión):
+      // no hay snapshot que validar.
       return [];
     }
 
-    const snapshot = this.procesoDiagramaPreview.obtenerSnapshot();
     console.debug(
       '[validación] nodos en snapshot:',
       snapshot.nodes.length,
@@ -2142,6 +2227,8 @@ export class DiagramaComponent {
 
   protected onCerrarDiagramaAsociadoModal(): void {
     this.procesoDiagramaPreview?.limpiarMarcadoresValidacion();
+    // Solo oculta el modal (clase display:none): el visor y su viewport quedan
+    // vivos en memoria hasta que termina la sesión del proceso.
     this.procesoDiagramModalVisible.set(false);
   }
 
@@ -2149,6 +2236,9 @@ export class DiagramaComponent {
     const mecanismo = this.selectedMecanismo();
     if (!mecanismo || mecanismo.por_defecto !== false) {
       return;
+    }
+    if (this.documentosOptions().length === 0) {
+      this.documentosOptions.set(this.documentosProcesoOptions());
     }
     this.selectedMecanismoForConfig.set(mecanismo);
     this.mecanismoConfigModalVisible.set(true);
@@ -3072,21 +3162,18 @@ export class DiagramaComponent {
 
     console.log('Submit simulado Crear/Editar proceso', payload);
 
-    const usuarioCreador = 'soportemovilgo';
-    const templateXml =
-      this.procesoEditSourceXml() !== ''
-        ? this.procesoEditSourceXml()
-        : this.crearProcesoRequestBuilder.buildLegacyTemplateXml(formValue, usuarioCreador);
+    const usuarioCreador = USUARIO_CREADOR_PROCESO;
+    const templateXml = this.construirTemplateXmlProceso(formValue, usuarioCreador);
 
     try {
-      const liveXml =
-        (await this.procesoDiagramaPreview?.exportLegacyXml(templateXml)) ?? templateXml;
+      const liveXml = await this.resolverLiveXmlProceso(templateXml);
       const request = this.crearProcesoRequestBuilder.buildRequest(
         formValue,
         liveXml,
         usuarioCreador,
         this.tareaConfigs(),
         this.formulariosProceso(),
+        this.construirExtrasCrearProceso(formValue),
       );
       console.log('CrearProcesoRequest', request);
     } catch {
@@ -3095,6 +3182,9 @@ export class DiagramaComponent {
 
     this.procesoModalVisible.set(false);
     this.procesoDiagramModalVisible.set(false);
+    // Termina la sesión del proceso: el visor se destruye y la próxima sesión
+    // parte desde el seed correspondiente.
+    this.procesoDiagramaMontadoVisible.set(false);
   }
 
   protected procesoModalTitulo(): string {
@@ -3182,72 +3272,183 @@ export class DiagramaComponent {
   }
 
   private cargarOpcionesDocumentosLivianos(): void {
-    if (this.documentosLivianoOptions().length > 0) {
+    if (this.documentosLivianoOptions().length > 0 || this.documentosLivianoCargando()) {
       return;
     }
+    this.documentosLivianoCargando.set(true);
     this.diagramaService.obtenerDocumentosLivianoConfiguracion().subscribe({
-      next: (respuesta) =>
+      next: (respuesta) => {
         this.documentosLivianoOptions.set(
           respuesta.documentos.map((doc) => ({
             label: doc.nombre_documento,
             value: String(doc.id),
           })),
-        ),
-      error: () => this.documentosLivianoOptions.set([]),
+        );
+        this.documentosLivianoCargando.set(false);
+      },
+      error: () => {
+        this.documentosLivianoOptions.set([]);
+        this.documentosLivianoCargando.set(false);
+      },
     });
   }
 
-  protected crearFilaFormularioProceso(): void {
-    const id = `fp-${++this.formularioProcesoUid.current}`;
-    const nueva: FormularioProcesoConfig = {
-      id,
-      nombre: '',
-      idFormulario: 0,
-      visibilidad: 'privado',
-    };
-    this.formulariosProceso.update((lista) => [...lista, nueva]);
-    this.filaFormularioEditandoId.set(id);
+  protected abrirFormularioEditModal(): void {
+    this.formularioEditId.set(null);
+    this.formularioEditNombre.set('');
+    this.formularioEditDocumentoValor.set(null);
+    this.formularioEditVisibilidad.set('privado');
+    this.formularioEditEnviado.set(false);
+    this.formularioEditModalAbierto.set(true);
+    this.enfocarInputNombreFormulario();
   }
 
-  protected editarFilaFormularioProceso(id: string): void {
-    this.filaFormularioEditandoId.set(id);
-  }
-
-  protected cancelarEdicionFilaFormularioProceso(id: string): void {
+  protected abrirFormularioEditModalExistente(id: string): void {
     const fila = this.formulariosProceso().find((f) => f.id === id);
-    if (fila !== undefined && fila.nombre === '' && fila.idFormulario === 0) {
-      this.formulariosProceso.update((lista) => lista.filter((f) => f.id !== id));
-    }
-    this.filaFormularioEditandoId.set(null);
-  }
-
-  protected guardarFilaFormularioProceso(id: string): void {
-    const fila = this.formulariosProceso().find((f) => f.id === id);
-    if (fila === undefined || fila.nombre === '' || fila.idFormulario === 0) {
+    if (fila === undefined) {
       return;
     }
-    this.filaFormularioEditandoId.set(null);
-  }
-
-  protected actualizarFilaFormularioProceso(
-    id: string,
-    patch: Partial<FormularioProcesoConfig>,
-  ): void {
-    this.formulariosProceso.update((lista) =>
-      lista.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    this.formularioEditId.set(id);
+    this.formularioEditNombre.set(fila.nombre);
+    this.formularioEditDocumentoValor.set(
+      fila.idFormulario === 0 ? null : String(fila.idFormulario),
     );
+    this.formularioEditVisibilidad.set(fila.visibilidad);
+    this.formularioEditEnviado.set(false);
+    this.formularioEditModalAbierto.set(true);
+    this.enfocarInputNombreFormulario();
   }
 
-  protected actualizarFormularioProcesoFila(id: string, valor: string | number): void {
-    const idFormulario = Number(valor);
+  protected cerrarFormularioEditModal(): void {
+    this.formularioEditModalAbierto.set(false);
+  }
+
+  protected formularioEditNombreInvalido(): boolean {
+    return this.formularioEditEnviado() && this.formularioEditNombre().trim() === '';
+  }
+
+  protected formularioEditDocumentoInvalido(): boolean {
+    return this.formularioEditEnviado() && this.formularioEditDocumentoValor() === null;
+  }
+
+  private enfocarInputNombreFormulario(): void {
+    setTimeout(() => {
+      const input = document.getElementById(
+        'formulario-edit-nombre',
+      ) as HTMLInputElement | null;
+      input?.focus();
+    }, 0);
+  }
+
+  protected guardarFormularioEdit(): void {
+    this.formularioEditEnviado.set(true);
+    const nombre = this.formularioEditNombre().trim();
+    const valorDocumento = this.formularioEditDocumentoValor();
+
+    if (nombre === '' || valorDocumento === null) {
+      return;
+    }
+
+    const idFormulario = Number(valorDocumento);
     const documento = this.documentosLivianoOptions().find(
-      (o) => o.value === String(idFormulario),
+      (o) => o.value === valorDocumento,
     );
+    const id = this.formularioEditId();
+    const visibilidad = this.formularioEditVisibilidad();
+
+    if (id === null) {
+      this.formularioProcesoUid.current += 1;
+      this.formulariosProceso.update((lista) => [
+        ...lista,
+        {
+          id: `fp-${this.formularioProcesoUid.current}`,
+          nombre,
+          idFormulario,
+          nombreDocumento: documento?.label,
+          visibilidad,
+        },
+      ]);
+    } else {
+      this.formulariosProceso.update((lista) =>
+        lista.map((f) =>
+          f.id === id
+            ? {
+                ...f,
+                nombre,
+                idFormulario,
+                nombreDocumento: documento?.label,
+                visibilidad,
+                compartido: visibilidad === 'privado' ? f.compartido : undefined,
+              }
+            : f,
+        ),
+      );
+    }
+
+    this.formularioEditModalAbierto.set(false);
+  }
+
+  protected abrirFormularioCompartir(id: string): void {
+    const fila = this.formulariosProceso().find((f) => f.id === id);
+    if (fila === undefined || fila.visibilidad !== 'privado') {
+      return;
+    }
+    this.formularioCompartirId.set(id);
+    this.formCompartirGrupo.set(fila.compartido?.grupo ?? []);
+    this.formCompartirCargo.set(fila.compartido?.cargo ?? []);
+    this.formCompartirUsuario.set(fila.compartido?.usuario ?? []);
+    this.formularioCompartirModalAbierto.set(true);
+  }
+
+  protected cerrarFormularioCompartir(): void {
+    this.formularioCompartirModalAbierto.set(false);
+  }
+
+  protected guardarFormularioCompartir(): void {
+    const id = this.formularioCompartirId();
+    if (id === null) {
+      return;
+    }
+    const compartido: FormularioCompartido = {
+      grupo: [...this.formCompartirGrupo()],
+      cargo: [...this.formCompartirCargo()],
+      usuario: [...this.formCompartirUsuario()],
+    };
     this.formulariosProceso.update((lista) =>
-      lista.map((f) =>
-        f.id === id ? { ...f, idFormulario, nombreDocumento: documento?.label } : f,
-      ),
+      lista.map((f) => (f.id === id ? { ...f, compartido } : f)),
     );
+    this.formularioCompartirModalAbierto.set(false);
+  }
+
+  protected formularioEsCompartido(fila: FormularioProcesoConfig): boolean {
+    const compartido = fila.compartido;
+
+    return (
+      compartido !== undefined &&
+      (compartido.grupo.length > 0 ||
+        compartido.cargo.length > 0 ||
+        compartido.usuario.length > 0)
+    );
+  }
+
+  protected resumenCompartido(fila: FormularioProcesoConfig): string {
+    const compartido = fila.compartido;
+
+    if (compartido === undefined) {
+      return '';
+    }
+
+    return `Áreas: ${compartido.grupo.length} · Cargos: ${compartido.cargo.length} · Usuarios: ${compartido.usuario.length}`;
+  }
+
+  protected etiquetaCompartidoCon(
+    opciones: readonly SelectOption[],
+    valores: readonly string[],
+  ): string {
+    return valores
+      .map((valor) => this.labelDeOpcion(opciones, valor))
+      .filter((label) => label !== '')
+      .join(', ');
   }
 
   protected eliminarFilaFormularioProceso(id: string): void {
@@ -3278,10 +3479,6 @@ export class DiagramaComponent {
     return id === null
       ? undefined
       : this.formulariosProceso().find((f) => f.id === id);
-  }
-
-  protected formularioSeleccionadoValor(fila: FormularioProcesoConfig): string | null {
-    return fila.idFormulario === 0 ? null : String(fila.idFormulario);
   }
 
   protected nombreDocumentoDeFormulario(fila: FormularioProcesoConfig): string {
@@ -3407,6 +3604,7 @@ export class DiagramaComponent {
         docComunId: doc.doc_comun_id,
         idFormulario: doc.id_documento,
         visibilidad: doc.privado ? 'privado' : 'publico',
+        compartido: mapearCompartidoDesdeBackend(doc),
       })),
     );
     this.formularioProcesoUid.current = Math.max(this.formularioProcesoUid.current, indice);
@@ -3493,6 +3691,10 @@ export class DiagramaComponent {
   }
 
   protected traspasoSeleccionarOrigenMetadato(opcion: MetadatoOpcion): void {
+    if (this.traspasoOrigenYaConfigurado(opcion)) {
+      return;
+    }
+
     this.traspasoOrigenSeleccion.set(opcion.value);
   }
 
@@ -3506,6 +3708,15 @@ export class DiagramaComponent {
 
   protected traspasoDestinoYaConfigurado(opcion: MetadatoOpcion): boolean {
     return this.traspasosTrabajo().some((traspaso) => traspaso.destino.clave === opcion.value);
+  }
+
+  protected traspasoOrigenYaConfigurado(opcion: MetadatoOpcion): boolean {
+    const idFormulario = this.traspasoOrigenFormularioId();
+
+    return this.traspasosTrabajo().some(
+      (traspaso) =>
+        traspaso.origen.clave === opcion.value && traspaso.origen.idFormulario === idFormulario,
+    );
   }
 
   protected traspasoAgregarHabilitado(): boolean {
@@ -3539,6 +3750,7 @@ export class DiagramaComponent {
       filaDestino === undefined ||
       opcionOrigen === undefined ||
       opcionDestino === undefined ||
+      this.traspasoOrigenYaConfigurado(opcionOrigen) ||
       this.traspasoDestinoYaConfigurado(opcionDestino)
     ) {
       return;
@@ -3781,6 +3993,128 @@ export class DiagramaComponent {
         };
       }),
     };
+  }
+
+  private construirExtrasCrearProceso(
+    formValue: ProcesoModalFormValue,
+  ): CrearProcesoRequestExtras {
+    const transicionConfigsEfectivos: Record<string, TransicionConfig> = {
+      ...this.transicionConfigs(),
+    };
+
+    for (const flujo of this.snapshotDiagramaActual()?.transitions ?? []) {
+      if (transicionConfigsEfectivos[flujo.id] !== undefined) {
+        continue;
+      }
+
+      const precargada = this.construirTransicionPrecargada(flujo.sourceId, flujo.targetId);
+
+      if (precargada !== null) {
+        transicionConfigsEfectivos[flujo.id] = precargada;
+      }
+    }
+
+    return {
+      mecanismo: this.selectedMecanismo(),
+      configDatoSelections: this.configDatoSelections(),
+      procesoCompartido:
+        formValue.visibilidad === 'privado' ? this.buildProcesoCompartidoPayload() : null,
+      transicionConfigs: transicionConfigsEfectivos,
+      decisionConfigs: this.decisionConfigs(),
+      resolverMetadato: (idDocumento, clave) => this.resolverOpcionMetadato(idDocumento, clave),
+      resolverMetadatoRol: (idRol, idMetadato) =>
+        this.resolverOpcionMetadatoRol(idRol, idMetadato),
+      documentosProceso: this.documentosProcesoOptions(),
+      idPadre: this.procesoIdPadreEdicion(),
+    };
+  }
+
+  private resolverOpcionMetadato(idDocumento: number, clave: string): OpcionMetadatoResuelta | null {
+    const opcion = this.mensajeMetadatosCache.get(idDocumento)?.find((o) => o.value === clave);
+
+    if (opcion === undefined) {
+      return null;
+    }
+
+    return {
+      idMetadato: opcion.idMetadato,
+      idBloque: opcion.idBloque ?? null,
+      codigoBloque: opcion.codigoBloque ?? null,
+      tipo: opcion.tipo ?? null,
+    };
+  }
+
+  private resolverOpcionMetadatoRol(
+    idRol: number | null,
+    idMetadato: number | null,
+  ): OpcionMetadatoResuelta | null {
+    if (idRol === null || idMetadato === null) {
+      return null;
+    }
+
+    const requisito = this.metadatosRequeridosRol().find((rol) => rol.id_rol === idRol);
+    const metadato = requisito?.metadatosRequeridos.find((m) => m.id_metadato === idMetadato);
+
+    if (metadato === undefined) {
+      return null;
+    }
+
+    return {
+      idMetadato: metadato.id_metadato,
+      idBloque: metadato.id_bloque ?? null,
+      codigoBloque: null,
+      tipo: null,
+    };
+  }
+
+  private documentosProcesoOptions(): readonly SelectOption[] {
+    const opciones: SelectOption[] = [];
+    const vistos = new Set<string>();
+
+    for (const opcion of [...this.documentosOptions(), ...this.documentosLivianoOptions()]) {
+      if (!vistos.has(opcion.value)) {
+        vistos.add(opcion.value);
+        opciones.push(opcion);
+      }
+    }
+
+    return opciones;
+  }
+
+  protected documentosReglasProceso(): readonly SelectOption[] {
+    const opciones: SelectOption[] = [];
+    const vistos = new Set<string>();
+
+    for (const fila of this.formulariosProceso()) {
+      if (fila.idFormulario === 0 || vistos.has(String(fila.idFormulario))) {
+        continue;
+      }
+
+      vistos.add(String(fila.idFormulario));
+      opciones.push({
+        label: fila.nombre || fila.nombreDocumento || String(fila.idFormulario),
+        value: String(fila.idFormulario),
+      });
+    }
+
+    for (const opcion of this.documentosOptions()) {
+      if (!vistos.has(opcion.value)) {
+        vistos.add(opcion.value);
+        opciones.push(opcion);
+      }
+    }
+
+    return opciones;
+  }
+
+  private procesoIdPadreEdicion(): number | null {
+    if (this.procesoModalMode() !== 'edit' || this.procesoEditId() === null) {
+      return null;
+    }
+
+    const row = this.procesos().find((item) => item.id_proceso === this.procesoEditId());
+
+    return row?.id_padre ?? null;
   }
 
   protected onProcesosEjecucionQueryParamsChange(params: NzTableQueryParams): void {
