@@ -1,9 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   LegacyBpmnNodeSnapshot,
   LegacyBpmnSnapshot,
   LegacyBpmnTransitionSnapshot,
 } from '../models/diagrama.model';
+import type { ConfiguracionesLegacyXml } from '../models/legacy-xml-configuraciones.model';
+import { LegacyXmlConfiguracionesService } from './legacy-xml-configuraciones.service';
 
 type LegacyTagName =
   | 'start-state'
@@ -30,7 +32,13 @@ const LEGACY_FLOW_TAGS: readonly LegacyTagName[] = [
 
 @Injectable({ providedIn: 'root' })
 export class LegacyXmlSerializerService {
-  serializeFromSnapshot(templateXml: string, snapshot: LegacyBpmnSnapshot): string {
+  private readonly configuracionesService = inject(LegacyXmlConfiguracionesService);
+
+  serializeFromSnapshot(
+    templateXml: string,
+    snapshot: LegacyBpmnSnapshot,
+    configuraciones?: ConfiguracionesLegacyXml,
+  ): string {
     const parser = new DOMParser();
     const serializer = new XMLSerializer();
     const documentXml = parser.parseFromString(templateXml, 'text/xml');
@@ -117,6 +125,10 @@ export class LegacyXmlSerializerService {
       }
 
       insertAfter = nodeElement;
+    }
+
+    if (configuraciones) {
+      this.configuracionesService.aplicarConfiguraciones(documentXml, snapshot, configuraciones);
     }
 
     const serializedXml = serializer.serializeToString(documentXml);

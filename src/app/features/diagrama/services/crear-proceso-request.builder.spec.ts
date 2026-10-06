@@ -3,8 +3,10 @@ import {
   CrearProcesoFormSource,
   OpcionMetadatoResuelta,
 } from './crear-proceso-request.builder';
-import { buildDefaultTareaConfig, TareaConfig } from '../models/tarea-config.model';
+import { buildDefaultTareaConfig, FormularioProcesoConfig, TareaConfig } from '../models/tarea-config.model';
 import { MecanismoProceso, ProcesoCompartido } from '../models/diagrama.model';
+import { buildDefaultDecisionConfig } from '../models/decision-config.model';
+import { buildDefaultMensajeConfig, MensajeConfig } from '../models/mensaje-config.model';
 import { buildDefaultTransicionConfig, TransicionConfig } from '../models/transicion-config.model';
 import { buildDefaultTimerConfig } from '../models/timer-config.model';
 
@@ -77,6 +79,42 @@ const XML_CON_TRANSICIONES = `<?xml version="1.0" encoding="UTF-8"?>
   <task-node name="Tarea" id="Tarea_1">
     <transition id="Transicion 1" to="Fin_1" esTimer="false" levantaFormulario="false" />
   </task-node>
+  <end-state name="Fin" id="Fin_1" />
+</process-definition>`;
+
+const XML_CON_TIMER = `<?xml version="1.0" encoding="UTF-8"?>
+<process-definition swimlane="1" version="1" name="Proceso" privado="true" compartido="false">
+  <documentosComunesProceso></documentosComunesProceso>
+  <responsables></responsables>
+  <mecanismoDenominacion idMecanismoDenominacion="-1" />
+  <catalogos></catalogos>
+  <Roles></Roles>
+  <SubProcesosAsociados></SubProcesosAsociados>
+  <timer name="Timer 1" id="Timer 1" esTiempo="true" esMetFormulario="false" datoFijo="5" idUnidadTiempo="minutos" fecha="" hora="">
+    <transition to="Tarea 1" id="Transicion 1" esTimer="false" interrupcion="false" />
+  </timer>
+  <task-node name="Tarea" id="Tarea 1">
+    <transition to="Fin 1" id="Transicion 2" esTimer="true" interrupcion="true">
+      <timerTransicion esTiempo="false" esMetFormulario="true" idBloque="5646" idMetadato="1483" datoFijo="0" idUnidadTiempo="" fecha="" hora="" />
+    </transition>
+  </task-node>
+  <end-state name="Fin 1" id="Fin 1" />
+</process-definition>`;
+
+const XML_CON_MENSAJE = `<?xml version="1.0" encoding="UTF-8"?>
+<process-definition swimlane="1" version="1" name="Proceso" privado="true" compartido="false">
+  <documentosComunesProceso></documentosComunesProceso>
+  <responsables></responsables>
+  <mecanismoDenominacion idMecanismoDenominacion="-1" />
+  <catalogos></catalogos>
+  <Roles></Roles>
+  <SubProcesosAsociados></SubProcesosAsociados>
+  <start-state name="Inicio" id="Inicio_1">
+    <transition to="Msg 1" />
+  </start-state>
+  <mensaje name="Msg" id="Msg 1" subject="Asunto XML" content="Contenido XML" encabezado="true" enviarUsuariosDelCargo="false" enviaFormularioExterno="false" conCopia="true">
+    <transition to="Fin_1" />
+  </mensaje>
   <end-state name="Fin" id="Fin_1" />
 </process-definition>`;
 
@@ -492,7 +530,7 @@ describe('CrearProcesoRequestBuilder - permisos del proceso', () => {
       procesoCompartido,
     });
 
-    expect(request.permisosUsuarios).toEqual([{ id_usuario: 'soporte' }]);
+    expect(request.permisosUsuarios).toEqual(['soporte']);
     expect(request.permisosRoles).toEqual([1, 46]);
     expect(request.permisosGrupos).toEqual([3]);
   });
@@ -536,18 +574,34 @@ describe('CrearProcesoRequestBuilder - datos requeridos del mecanismo', () => {
         id_mecanismo_denominacion: 38,
         orden: 2,
         id_dato_mecanismo: 'var',
+        id_dato_req_mecanismo: 261,
+      },
+      {
+        valor_por_defecto: '',
+        id_mecanismo_denominacion: 38,
+        orden: 3,
+        id_dato_mecanismo: 'var',
         id_dato_req_mecanismo: 262,
       },
     ],
   };
 
-  it('mapea texto fijo y metadato de formulario con idBloque resuelto', () => {
+  it('mapea texto fijo, correlativo y metadato de formulario con idBloque resuelto', () => {
     const builder = new CrearProcesoRequestBuilder();
 
-    const request = builder.buildRequest(FORM_SOURCE, XML_BASE, 'admin', undefined, undefined, {
+    const request = builder.buildRequest(FORM_SOURCE, XML_BASE, 'admin', undefined, [
+      {
+        id: 'fp-1',
+        nombre: 'Solicitud',
+        nombreDocumento: 'Solicitud de Viático',
+        idFormulario: 795,
+        visibilidad: 'privado',
+      },
+    ], {
       mecanismo: MECANISMO,
       configDatoSelections: {
         260: { tipo: 'texto_fijo', valor: 'Viáticos' },
+        261: { tipo: 'correlativo', secuencia: 'STD-2026' },
         262: {
           tipo: 'metadato_formulario',
           documento: '795',
@@ -570,34 +624,33 @@ describe('CrearProcesoRequestBuilder - datos requeridos del mecanismo', () => {
     expect(request.procesoMecanismo.datosRequeridos).toEqual([
       {
         dato: {
-          idDatoReqProceso: null,
-          processId: null,
           idDatoReqMecanismo: 260,
           idDatoDisponibleProceso: 'txf',
           valorTextoFijo: 'Viáticos',
-          nombreSecuencia: '',
         },
         metadatoRequerido: null,
         nombreDocumentoComun: null,
       },
       {
         dato: {
-          idDatoReqProceso: null,
-          processId: null,
+          idDatoReqMecanismo: 261,
+          idDatoDisponibleProceso: 'cor',
+        },
+        metadatoRequerido: null,
+        nombreDocumentoComun: null,
+      },
+      {
+        dato: {
           idDatoReqMecanismo: 262,
           idDatoDisponibleProceso: 'met',
-          valorTextoFijo: '',
-          nombreSecuencia: '',
         },
         metadatoRequerido: {
-          idDatoReqProceso: null,
           idDocumento: 795,
           idMetadato: 1219,
           idBloque: 5641,
           codigoBloque: 'BM2172',
-          docComunId: null,
         },
-        nombreDocumentoComun: 'Solicitud de Viático',
+        nombreDocumentoComun: 'Solicitud',
       },
     ]);
   });
@@ -777,21 +830,25 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
     ]);
     expect(transicion?.reglasNegocio).toEqual([
       {
-        idReglaNegocio: null,
         idOperadorRegla: 'ctn',
-        izqEsDoc: false,
-        izqIdMetadato: 1266,
-        izqIdBloque: 5641,
-        izqCodigoBloque: 'BM2172',
-        izqIdTipoDato: 'ALF',
-        izqIdOperando: null,
-        derEsDoc: false,
-        derIdMetadato: null,
-        derIdBloque: null,
-        derCodigoBloque: null,
-        derIdTipoDato: null,
-        derIdOperando: null,
-        derValorOperando: 'Aprobado',
+        operandoIzq: {
+          valorOperando: null,
+          esDoc: true,
+          nombreDocComun: null,
+          idBloque: 5641,
+          codigoBloque: 'BM2172',
+          idMetadato: 1266,
+          idTipoDato: 'ALF',
+        },
+        operandoDer: {
+          valorOperando: 'Aprobado',
+          esDoc: false,
+          nombreDocComun: null,
+          idBloque: null,
+          codigoBloque: null,
+          idMetadato: null,
+          idTipoDato: null,
+        },
       },
     ]);
     expect(transicion?.tieneTimer).toBe(true);
@@ -810,6 +867,167 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
       hora: '',
     });
     expect(transicion?.conInterrupcion).toBe(false);
+  });
+
+  it('regla de negocio con valor de otro metadato arma operandoDer como documento', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      reglasNegocio: [
+        {
+          idDocumento: 660,
+          idMetadato: 'BM1576-961',
+          operador: 'contiene',
+          idOperadorRegla: null,
+          fuenteValor: 'otroMetadato',
+          valorTexto: '',
+          idDocumentoValor: 795,
+          idMetadatoValor: 'BM2172-1219',
+        },
+      ],
+    };
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TRANSICIONES, 'admin', undefined, undefined, {
+      transicionConfigs: { Transicion_1: transicionConfig },
+      resolverMetadato: construirResolver({
+        'BM1576-961': { idMetadato: 961, idBloque: 4527, codigoBloque: 'BM1576', tipo: 'ALF' },
+        'BM2172-1219': { idMetadato: 1219, idBloque: 5641, codigoBloque: 'BM2172', tipo: 'SIS' },
+      }),
+    });
+
+    const transicion = request.transiciones.find((wrapper) => wrapper.idActividadDestino === 'Fin_1');
+
+    expect(transicion?.reglasNegocio).toEqual([
+      {
+        idOperadorRegla: 'ctn',
+        operandoIzq: {
+          valorOperando: null,
+          esDoc: true,
+          nombreDocComun: null,
+          idBloque: 4527,
+          codigoBloque: 'BM1576',
+          idMetadato: 961,
+          idTipoDato: 'ALF',
+        },
+        operandoDer: {
+          valorOperando: null,
+          esDoc: true,
+          nombreDocComun: null,
+          idBloque: 5641,
+          codigoBloque: 'BM2172',
+          idMetadato: 1219,
+          idTipoDato: 'SIS',
+        },
+      },
+    ]);
+  });
+
+  it('idAccionTransicion viaja como id string de la accion seleccionada', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const destinoFin = (request: ReturnType<typeof builder.buildRequest>) =>
+      request.transiciones.find((wrapper) => wrapper.idActividadDestino === 'Fin_1')
+        ?.transicion.idAccionTransicion ?? null;
+
+    const conAccion = builder.buildRequest(
+      FORM_SOURCE,
+      XML_CON_TRANSICIONES,
+      'admin',
+      undefined,
+      undefined,
+      {
+        transicionConfigs: {
+          Transicion_1: {
+            ...buildDefaultTransicionConfig(),
+            accionRequerida: true,
+            accion: 'FIRMAR_TOKEN',
+          },
+        },
+      },
+    );
+
+    const sinAccion = builder.buildRequest(
+      FORM_SOURCE,
+      XML_CON_TRANSICIONES,
+      'admin',
+      undefined,
+      undefined,
+      {
+        transicionConfigs: { Transicion_1: buildDefaultTransicionConfig() },
+      },
+    );
+
+    const sinConfig = builder.buildRequest(FORM_SOURCE, XML_BASE, 'admin');
+
+    expect(destinoFin(conAccion)).toBe('FIRMAR_TOKEN');
+    expect(destinoFin(sinAccion)).toBeNull();
+    for (const transicion of sinConfig.transiciones) {
+      expect(transicion.transicion.idAccionTransicion).toBeNull();
+    }
+  });
+
+  it('nombreDocComun se resuelve con los formularios de proceso', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const formulariosProceso = [
+      {
+        id: 'fp-1',
+        nombre: 'Solicitud',
+        idFormulario: 795,
+        visibilidad: 'privado',
+      },
+    ] as any;
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      reglasNegocio: [
+        {
+          idDocumento: 795,
+          idMetadato: 'BM2172-1266',
+          operador: 'contiene',
+          idOperadorRegla: null,
+          fuenteValor: 'valor',
+          valorTexto: '1',
+          idDocumentoValor: null,
+          idMetadatoValor: null,
+        },
+      ],
+    };
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TRANSICIONES, 'admin', undefined, formulariosProceso, {
+      transicionConfigs: { Transicion_1: transicionConfig },
+      resolverMetadato: construirResolver({
+        'BM2172-1266': { idMetadato: 1266, idBloque: 5641, codigoBloque: 'BM2172', tipo: 'ALF' },
+      }),
+    });
+
+    const transicion = request.transiciones.find((wrapper) => wrapper.idActividadDestino === 'Fin_1');
+    const regla = transicion?.reglasNegocio[0];
+
+    expect(regla?.operandoIzq.nombreDocComun).toBe('Solicitud');
+    expect(regla?.operandoDer).toEqual({
+      valorOperando: '1',
+      esDoc: false,
+      nombreDocComun: null,
+      idBloque: null,
+      codigoBloque: null,
+      idMetadato: null,
+      idTipoDato: null,
+    });
+  });
+
+  it('los permisos de documentosComunes llevan los usuarios como strings', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const formulariosProceso = [
+      {
+        id: 'fp-1',
+        nombre: 'Solicitud',
+        idFormulario: 795,
+        visibilidad: 'privado',
+        compartido: { grupo: [], cargo: [], usuario: ['soporte'] },
+      },
+    ] as any;
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_BASE, 'admin', undefined, formulariosProceso);
+
+    expect(request.documentosComunes[0]?.permisosUsuarios).toEqual(['soporte']);
   });
 
   it('transiciones sin configuración quedan con reglas vacías y timer null', () => {
@@ -861,5 +1079,329 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
       fecha: '',
       hora: '',
     });
+  });
+
+  it('la actividad timer viaja con su configuración cuando existe en la sesión', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TIMER, 'admin', undefined, undefined, {
+      timerConfigs: {
+        'Timer 1': {
+          ...buildDefaultTimerConfig(),
+          modo: 'datoFijo',
+          datoFijoTipo: 'tiempo',
+          duracionValor: 5,
+          duracionUnidad: 'minutos',
+        },
+      },
+    });
+
+    const timerActivity = request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'timer',
+    );
+    expect(timerActivity?.timer).toEqual({
+      idTimerProceso: null,
+      esMetFormulario: false,
+      docComunId: null,
+      idBloque: null,
+      idMetadato: null,
+      esDatoFijo: true,
+      esTiempo: true,
+      datoFijo: '5',
+      idUnidadTiempo: 'minutos',
+      esFecha: false,
+      fecha: '',
+      hora: '',
+    });
+
+    const tareaActivity = request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'tarea',
+    );
+    expect(tareaActivity?.timer).toBeNull();
+  });
+
+  it('la actividad timer sin config recupera el timer guardado del XML', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TIMER, 'admin');
+
+    const timerActivity = request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'timer',
+    );
+    expect(timerActivity?.timer).toEqual({
+      idTimerProceso: null,
+      esMetFormulario: false,
+      docComunId: null,
+      idBloque: null,
+      idMetadato: null,
+      esDatoFijo: true,
+      esTiempo: true,
+      datoFijo: '5',
+      idUnidadTiempo: 'minutos',
+      esFecha: false,
+      fecha: '',
+      hora: '',
+    });
+  });
+
+  it('la transición con esTimer en el XML sin config recupera el timerTransicion y la interrupción', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TIMER, 'admin');
+
+    const transicion = request.transiciones.find(
+      (wrapper) => wrapper.idActividadOrigen === 'Tarea 1',
+    );
+    expect(transicion?.tieneTimer).toBe(true);
+    expect(transicion?.timer).toEqual({
+      idTimerProceso: null,
+      esMetFormulario: true,
+      docComunId: null,
+      idBloque: 5646,
+      idMetadato: 1483,
+      esDatoFijo: false,
+      esTiempo: false,
+      datoFijo: '0',
+      idUnidadTiempo: '',
+      esFecha: false,
+      fecha: '',
+      hora: '',
+    });
+    expect(transicion?.conInterrupcion).toBe(true);
+
+    const transicionSinTimer = request.transiciones.find(
+      (wrapper) => wrapper.idActividadOrigen === 'Timer 1',
+    );
+    expect(transicionSinTimer?.tieneTimer).toBeNull();
+    expect(transicionSinTimer?.timer).toBeNull();
+    expect(transicionSinTimer?.conInterrupcion).toBeNull();
+  });
+});
+
+describe('CrearProcesoRequestBuilder - mensaje', () => {
+  const FORMULARIOS: readonly FormularioProcesoConfig[] = [
+    {
+      id: 'f1',
+      nombre: 'Flag',
+      nombreDocumento: 'Flag Solicitud',
+      idFormulario: 660,
+      visibilidad: 'privado',
+      docComunId: 3856,
+    },
+  ];
+
+  function actividadMensaje(builder: CrearProcesoRequestBuilder, extras?: Parameters<CrearProcesoRequestBuilder['buildRequest']>[5]) {
+    const request = builder.buildRequest(
+      FORM_SOURCE,
+      XML_CON_MENSAJE,
+      'admin',
+      undefined,
+      FORMULARIOS,
+      extras,
+    );
+
+    return request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'mensaje',
+    );
+  }
+
+  it('la actividad mensaje viaja con su configuración cuando existe en la sesión', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const mensajeConfig: MensajeConfig = {
+      ...buildDefaultMensajeConfig(),
+      asunto: 'Notificación',
+      contenido: '<p>Hola</p>',
+      encabezadoInfoProceso: true,
+      enviarACargo: true,
+      completarFormulario: 'externo',
+      adjuntarPdfIds: [660, 999],
+      destinatarios: {
+        usuariosSistema: ['jperez'],
+        usuariosExternos: ['a@mail.cl'],
+        referencias: [{ idDocumento: 660, idMetadato: 'BM2172-1266' }],
+      },
+      destinatariosCc: {
+        usuariosSistema: ['mrojas'],
+        usuariosExternos: [],
+        referencias: [{ idDocumento: 660, idMetadato: 'BM2177-1483' }],
+      },
+    };
+
+    const actividad = actividadMensaje(builder, {
+      mensajeConfigs: { 'Msg 1': mensajeConfig },
+      resolverMetadato: construirResolver({
+        'BM2172-1266': { idMetadato: 1266, idBloque: 5641, codigoBloque: 'BM2172', tipo: 'ALF' },
+        'BM2177-1483': { idMetadato: 1483, idBloque: 5646, codigoBloque: 'BM2177', tipo: 'NUM' },
+      }),
+    });
+
+    expect(actividad?.mensaje).toEqual({
+      asunto: 'Notificación',
+      contenido: '<p>Hola</p>',
+      encabezado: true,
+      cc: true,
+      enviaACargo: true,
+      enviaFormularioExterno: true,
+      usuariosSistema: ['jperez'],
+      usuariosSistemaCc: ['mrojas'],
+      usuariosExternos: ['a@mail.cl'],
+      usuariosExternosCc: [],
+      rolesSistema: [],
+      destinatariosMetadato: [
+        {
+          nombreDocComun: 'Flag',
+          idMetadato: 1266,
+          idBloque: 5641,
+          codigoBloque: 'BM2172',
+          esGrilla: false,
+        },
+      ],
+      destinatariosMetadatoCc: [
+        {
+          nombreDocComun: 'Flag',
+          idMetadato: 1483,
+          idBloque: 5646,
+          codigoBloque: 'BM2177',
+          esGrilla: false,
+        },
+      ],
+      documentosFormulario: [],
+      documentosAdjuntos: ['Flag'],
+    });
+  });
+
+  it('la actividad mensaje sin config recupera el mensaje guardado del XML', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const actividad = actividadMensaje(builder);
+
+    expect(actividad?.mensaje).toEqual({
+      asunto: 'Asunto XML',
+      contenido: 'Contenido XML',
+      encabezado: true,
+      cc: true,
+      enviaACargo: false,
+      enviaFormularioExterno: false,
+      usuariosSistema: [],
+      usuariosSistemaCc: [],
+      usuariosExternos: [],
+      usuariosExternosCc: [],
+      rolesSistema: [],
+      destinatariosMetadato: [],
+      destinatariosMetadatoCc: [],
+      documentosFormulario: [],
+      documentosAdjuntos: [],
+    });
+  });
+
+  it('la actividad tarea viaja con mensaje null', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_BASE, 'admin');
+
+    const tareaActivity = request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'tarea',
+    );
+
+    expect(tareaActivity?.mensaje).toBeNull();
+    expect(tareaActivity?.timer).toBeNull();
+  });
+});
+
+describe('CrearProcesoRequestBuilder - decisión', () => {
+  const XML_CON_DECISION = `<?xml version="1.0" encoding="UTF-8"?>
+<process-definition swimlane="1" version="1" name="Proceso" privado="true" compartido="false">
+  <documentosComunesProceso></documentosComunesProceso>
+  <responsables></responsables>
+  <mecanismoDenominacion idMecanismoDenominacion="-1" />
+  <catalogos></catalogos>
+  <Roles></Roles>
+  <SubProcesosAsociados></SubProcesosAsociados>
+  <start-state name="Inicio" id="Inicio_1">
+    <transition to="Decision_1" />
+  </start-state>
+  <decision name="Decision" id="Decision 1">
+    <transition to="Fin_1" />
+  </decision>
+  <end-state name="Fin" id="Fin_1" />
+</process-definition>`;
+
+  const FORMULARIOS: readonly FormularioProcesoConfig[] = [
+    {
+      id: 'f1',
+      nombre: 'Flag',
+      nombreDocumento: 'Flag Solicitud',
+      idFormulario: 660,
+      visibilidad: 'privado',
+      docComunId: 3856,
+    },
+  ];
+
+  function actividadDecision(
+    builder: CrearProcesoRequestBuilder,
+    extras?: Parameters<CrearProcesoRequestBuilder['buildRequest']>[5],
+    formulariosProceso?: readonly FormularioProcesoConfig[],
+  ) {
+    const request = builder.buildRequest(
+      FORM_SOURCE,
+      XML_CON_DECISION,
+      'admin',
+      undefined,
+      formulariosProceso,
+      extras,
+    );
+
+    return request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'decision',
+    );
+  }
+
+  it('nombreDocComunProceso es el nombre del formulario de proceso, no del documento', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const decisionConfig = {
+      ...buildDefaultDecisionConfig('Decision'),
+      ejecutaFuncionalidad: true,
+      funcionalidad: 'freg' as const,
+      documento: 660,
+    };
+
+    const actividad = actividadDecision(
+      builder,
+      {
+        decisionConfigs: { Decision_1: decisionConfig },
+        documentosProceso: [{ label: 'Flag Solicitud', value: '660' }],
+      },
+      FORMULARIOS,
+    );
+
+    expect(actividad?.documentosComunesActividad).toEqual([
+      {
+        nombreDocComunProceso: 'Flag',
+        documentoComunActividad: {
+          id: { activityId: null, docComunId: null },
+          tieneMetadatosTransferidos: 'false',
+        },
+        metadatosDisponibles: [],
+        reglaMultiFormulario: null,
+        metadatosTransferidos: [],
+      },
+    ]);
+  });
+
+  it('sin formularios de proceso cae al nombre del documento de extras', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const decisionConfig = {
+      ...buildDefaultDecisionConfig('Decision'),
+      ejecutaFuncionalidad: true,
+      funcionalidad: 'freg' as const,
+      documento: 660,
+    };
+
+    const actividad = actividadDecision(builder, {
+      decisionConfigs: { Decision_1: decisionConfig },
+      documentosProceso: [{ label: 'Flag Solicitud', value: '660' }],
+    });
+
+    expect(actividad?.documentosComunesActividad[0]?.nombreDocComunProceso).toBe('Flag Solicitud');
   });
 });

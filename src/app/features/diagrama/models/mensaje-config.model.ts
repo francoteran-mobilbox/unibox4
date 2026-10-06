@@ -46,6 +46,19 @@ export function buildDefaultMensajeDestinatarios(): MensajeDestinatarios {
   };
 }
 
+export function mensajeDestinoConfigurado(destino: MensajeDestinatarios): boolean {
+  return (
+    destino.usuariosSistema.length > 0 ||
+    destino.usuariosExternos.length > 0 ||
+    destino.referencias.some(
+      (referencia) =>
+        referencia.idDocumento !== null &&
+        referencia.idMetadato !== null &&
+        referencia.idMetadato.trim() !== '',
+    )
+  );
+}
+
 export function buildDefaultMensajeConfig(): MensajeConfig {
   return {
     destinatarios: buildDefaultMensajeDestinatarios(),

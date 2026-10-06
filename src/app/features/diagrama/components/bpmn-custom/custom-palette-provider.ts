@@ -1,6 +1,7 @@
 import type { ModuleDeclaration } from 'didi';
-import { createLegacyId } from './legacy-id-utils';
+import { crearShapeConNombreDefault } from './nombre-default-utils';
 import type {
+  BpmnFactoryService,
   BpmnPaletteEntries,
   BpmnPaletteEntry,
   CreateService,
@@ -48,6 +49,7 @@ export class CustomPaletteProvider {
     'create',
     'elementFactory',
     'elementRegistry',
+    'bpmnFactory',
     'handTool',
     'lassoTool',
     'globalConnect',
@@ -58,6 +60,7 @@ export class CustomPaletteProvider {
     private readonly create: CreateService,
     private readonly elementFactory: ElementFactoryService,
     private readonly elementRegistry: ElementRegistryService,
+    private readonly bpmnFactory: BpmnFactoryService,
     private readonly handTool: HandToolService,
     private readonly lassoTool: LassoToolService,
     private readonly globalConnect: GlobalConnectService,
@@ -102,8 +105,11 @@ export class CustomPaletteProvider {
 
   private buildCreateEntry(entryId: string, kind: ElementKind): BpmnPaletteEntry {
     const startCreate = (event: MouseEvent): void => {
-      const id = createLegacyId(kind.type, kind.eventDefinitionType, this.elementRegistry);
-      const shape = this.elementFactory.createShape(id ? { ...kind, id } : { ...kind });
+      const shape = crearShapeConNombreDefault(kind, {
+        elementRegistry: this.elementRegistry,
+        bpmnFactory: this.bpmnFactory,
+        elementFactory: this.elementFactory,
+      });
       this.create.start(event, shape);
     };
 

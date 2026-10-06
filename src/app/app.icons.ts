@@ -31,6 +31,7 @@ import {
   SettingOutline,
   ShoppingCartOutline,
   ShoppingOutline,
+  StopOutline,
   TeamOutline,
   UserAddOutline,
   ForkOutline,
@@ -39,7 +40,9 @@ import {
   ApartmentOutline,
   FileSearchOutline,
   ArrowRightOutline,
-  CheckSquareOutline
+  CheckSquareOutline,
+  CompressOutline,
+  ExpandOutline
 } from '@ant-design/icons-angular/icons';
 
 export const APP_ICONS: IconDefinition[] = [
@@ -74,6 +77,7 @@ export const APP_ICONS: IconDefinition[] = [
   SettingOutline,
   ShoppingCartOutline,
   ShoppingOutline,
+  StopOutline,
   TeamOutline,
   UserAddOutline,
   ForkOutline,
@@ -82,5 +86,7 @@ export const APP_ICONS: IconDefinition[] = [
   ApartmentOutline,
   FileSearchOutline,
   ArrowRightOutline,
-  CheckSquareOutline
+  CheckSquareOutline,
+  CompressOutline,
+  ExpandOutline
 ];

@@ -1,8 +1,9 @@
 import type { ModuleDeclaration } from 'didi';
-import { createLegacyId } from './legacy-id-utils';
+import { crearShapeConNombreDefault } from './nombre-default-utils';
 import type {
   AutoPlaceService,
   BpmnContextPadEntries,
+  BpmnFactoryService,
   ConnectService,
   ContextPadService,
   CreateService,
@@ -69,6 +70,7 @@ export class CustomContextPadProvider {
     'create',
     'elementFactory',
     'elementRegistry',
+    'bpmnFactory',
     'autoPlace',
     'connect',
   ];
@@ -78,6 +80,7 @@ export class CustomContextPadProvider {
     private readonly create: CreateService,
     private readonly elementFactory: ElementFactoryService,
     private readonly elementRegistry: ElementRegistryService,
+    private readonly bpmnFactory: BpmnFactoryService,
     private readonly autoPlace: AutoPlaceService,
     private readonly connect: ConnectService,
   ) {
@@ -120,10 +123,12 @@ export class CustomContextPadProvider {
   ): BpmnContextPadEntries[string] {
     const kind = CREATE_KINDS[entryId];
 
-    const createShape = (): unknown => {
-      const id = createLegacyId(kind.type, kind.eventDefinitionType, this.elementRegistry);
-      return this.elementFactory.createShape(id ? { ...kind, id } : { ...kind });
-    };
+    const createShape = (): unknown =>
+      crearShapeConNombreDefault(kind, {
+        elementRegistry: this.elementRegistry,
+        bpmnFactory: this.bpmnFactory,
+        elementFactory: this.elementFactory,
+      });
 
     const appendStart = (event: MouseEvent, element: unknown): void => {
       const shape = createShape();

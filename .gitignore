@@ -45,3 +45,4 @@ Thumbs.db
 # Archivos locales de referencia (no versionados)
 /crear-proceso-request-ejemplo*.json
 /src/app/features/diagrama/legacy.xml
+/src/app/features/diagrama/docs

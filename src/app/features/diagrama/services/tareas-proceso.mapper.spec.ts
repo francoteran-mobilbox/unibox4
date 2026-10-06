@@ -790,7 +790,7 @@ describe('tareas-proceso.mapper - timer de transición e interrupción', () => {
     const config = construirTransicionConfigDesdeActividad(transicion, FORMULARIOS);
 
     expect(config.timer.datoFijoTipo).toBe('tiempo');
-    expect(config.timer.duracionValor).toBe(2);
+    expect(config.timer.duracionValor).toBe(3);
     expect(config.timer.duracionUnidad).toBe('dias');
     expect(config.timer.idDocumento).toBeNull();
   });

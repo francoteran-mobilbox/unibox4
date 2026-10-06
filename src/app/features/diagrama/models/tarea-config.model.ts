@@ -130,6 +130,8 @@ export interface TareaConfig {
 export interface LabelValueOption<T extends string> {
   readonly value: T;
   readonly label: string;
+  readonly disabled?: boolean;
+  readonly avisoFuturaImplementacion?: string;
 }
 
 export const TAREA_DURACION_UNIDAD_OPTIONS: readonly TareaDuracionUnidad[] = [
@@ -138,13 +140,42 @@ export const TAREA_DURACION_UNIDAD_OPTIONS: readonly TareaDuracionUnidad[] = [
   'dias',
 ];
 
+// Por ahora solo 'cmf' (Completar formulario) está activo; el resto queda deshabilitado
+// hasta su implementación (quitar `disabled` para reactivarlos).
+export const AVISO_FUTURA_IMPLEMENTACION = 'Disponible en una futura implementación';
+
 export const TAREA_FUNCIONALIDAD_OPTIONS: readonly LabelValueOption<TareaFuncionalidad>[] = [
   { value: 'cmf', label: 'Completar formulario' },
-  { value: 'freg', label: 'Firmar registro' },
-  { value: 'rdd', label: 'Adjuntar documento para revisión por la dirección' },
-  { value: 'aur', label: 'Asignar usuarios a cargo' },
-  { value: 'aurg', label: 'Asignar usuarios a cargo contextual' },
-  { value: 'cmmf', label: 'Completar multi formulario' },
+  {
+    value: 'freg',
+    label: 'Firmar registro',
+    disabled: true,
+    avisoFuturaImplementacion: AVISO_FUTURA_IMPLEMENTACION,
+  },
+  {
+    value: 'rdd',
+    label: 'Adjuntar documento para revisión por la dirección',
+    disabled: true,
+    avisoFuturaImplementacion: AVISO_FUTURA_IMPLEMENTACION,
+  },
+  {
+    value: 'aur',
+    label: 'Asignar usuarios a cargo',
+    disabled: true,
+    avisoFuturaImplementacion: AVISO_FUTURA_IMPLEMENTACION,
+  },
+  {
+    value: 'aurg',
+    label: 'Asignar usuarios a cargo contextual',
+    disabled: true,
+    avisoFuturaImplementacion: AVISO_FUTURA_IMPLEMENTACION,
+  },
+  {
+    value: 'cmmf',
+    label: 'Completar multi formulario',
+    disabled: true,
+    avisoFuturaImplementacion: AVISO_FUTURA_IMPLEMENTACION,
+  },
 ];
 
 export const TAREA_TIPO_EJECUCION_OPTIONS: readonly LabelValueOption<TareaTipoEjecucion>[] = [

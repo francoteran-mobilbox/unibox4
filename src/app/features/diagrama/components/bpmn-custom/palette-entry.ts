@@ -30,8 +30,17 @@ export interface CreateService {
   start(event: MouseEvent, shapeOrShapes: unknown, context?: Record<string, unknown>): void;
 }
 
+export interface BpmnFactoryService {
+  create(type: string, attrs?: Record<string, unknown>): unknown;
+}
+
 export interface ElementFactoryService {
-  createShape(attrs: { id?: string; type: string; eventDefinitionType?: string }): unknown;
+  createShape(attrs: {
+    id?: string;
+    type: string;
+    eventDefinitionType?: string;
+    businessObject?: unknown;
+  }): unknown;
 }
 
 export interface ElementRegistryService {

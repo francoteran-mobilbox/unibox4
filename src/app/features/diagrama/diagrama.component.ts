@@ -1,4 +1,4 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -35,9 +35,9 @@ import { NzTableModule, NzTableQueryParams } from 'ng-zorro-antd/table';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
-import { Subject, Subscription, Observable, forkJoin, of } from 'rxjs';
+import { Subject, Subscription, Observable, forkJoin, of, fromEvent } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, map } from 'rxjs/operators';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NzRadioModule } from 'ng-zorro-antd/radio';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzTimePickerModule } from 'ng-zorro-antd/time-picker';
@@ -60,9 +60,20 @@ import {
   GrillaMetadatoInfo,
   ProcesoCompartido,
   LegacyBpmnSnapshot,
+  LegacyBpmnTransitionSnapshot,
 } from './models/diagrama.model';
 import { ResultadoValidacionDiagrama } from './models/validacion-diagrama.model';
+import type { CrearProcesoRequest } from './models/crear-proceso-request.model';
+import type {
+  ConfiguracionesLegacyXml,
+  DetalleMetadatoLegacy,
+  DocumentoLegacyInfo,
+} from './models/legacy-xml-configuraciones.model';
 import { validarDiagrama } from './services/validador-diagrama';
+import {
+  usosFormularioProceso,
+  type UsosFormularioProcesoInput,
+} from './services/usos-formulario-proceso';
 import { BpmnBasePreviewComponent } from './components/bpmn-base-preview.component';
 import { BpmnAdapterService } from './services/bpmn-adapter.service';
 import {
@@ -317,7 +328,7 @@ const FLAGS_TRANSICION_VACIOS: TransicionFlags = {
 const DEFAULT_ROLE_IDS: readonly number[] = [1];
 const DEFAULT_PAGE_INDEX = 1;
 const DEFAULT_PAGE_SIZE = 10;
-const USUARIO_CREADOR_PROCESO = 'soportemovilgo';
+const USUARIO_CREADOR_PROCESO = 'SoporteMovilgo';
 const DATO_DISPONIBLE_PROCESO_TO_TIPO: Record<string, string> = {
   txf: 'texto_fijo',
   met: 'metadato_formulario',
@@ -349,6 +360,7 @@ const MODAL_FORM_DEFAULTS: ProcesoModalFormValue = {
   imports: [
     DatePipe,
     DecimalPipe,
+    NgTemplateOutlet,
     ReactiveFormsModule,
     FormsModule,
     NzAlertModule,
@@ -423,10 +435,10 @@ export class DiagramaComponent {
   protected readonly procesoDiagramaMontadoVisible = signal(false);
   protected readonly procesoDiagramTouched = signal(false);
   protected readonly procesoDiagramaXmlBase = signal('');
-  protected readonly diagramaElementoModalVisible = signal(false);
+  protected readonly diagramaModalPantallaCompleta = signal(false);
   protected readonly diagramaElementoSeleccionado = signal<BpmnElementoInfo | null>(null);
   protected readonly diagramaElementoNombreInput = signal('');
-  protected readonly diagramaElementoModalTitulo = computed(() => {
+  protected readonly diagramaElementoPanelTitulo = computed(() => {
     const elemento = this.diagramaElementoSeleccionado();
     if (!elemento) {
       return 'Elemento del diagrama';
@@ -447,7 +459,10 @@ export class DiagramaComponent {
   protected readonly crudFormulariosModalAbierto = signal(false);
   protected readonly documentosLivianoOptions = signal<readonly SelectOption[]>([]);
   protected readonly documentosLivianoCargando = signal(false);
+  protected readonly documentosLivianoFirmables = signal<ReadonlySet<string>>(new Set());
   protected readonly formulariosProceso = signal<readonly FormularioProcesoConfig[]>([]);
+  protected readonly formulariosCrudAviso = signal<readonly string[]>([]);
+  protected readonly formularioEditAviso = signal('');
   protected readonly formularioEditModalAbierto = signal(false);
   protected readonly formularioEditId = signal<string | null>(null);
   protected readonly formularioEditNombre = signal('');
@@ -788,6 +803,7 @@ export class DiagramaComponent {
   protected readonly tieneErroresValidacionDiagrama = computed(() =>
     this.validacionDiagrama().some((resultado) => resultado.nivel === 'error'),
   );
+  protected readonly procesoDiagramaInvalido = signal(false);
   private readonly transicionCombo = signal<{ origen: BpmnNodoKind; destino: BpmnNodoKind } | null>(
     null,
   );
@@ -1199,7 +1215,7 @@ export class DiagramaComponent {
   }[] = [
     { value: 'sin', label: 'Sin formulario' },
     { value: 'proceso', label: 'Formulario de proceso' },
-    { value: 'externo', label: 'formulario externo' },
+    { value: 'externo', label: 'Formulario externo' },
   ];
 
   private buildMensajeDestinatariosGroup() {
@@ -1495,7 +1511,7 @@ export class DiagramaComponent {
       return '';
     }
 
-    const nombreDocumento = this.labelDeOpcion(this.documentosOptions(), docId);
+    const nombreDocumento = this.labelDocumentoOFormulario(docId);
 
     return `/insertar//var/${metadato.label}%${nombreDocumento}%${metadato.codigoBloque ?? ''}%${metadato.idMetadato}/insertar/`;
   }
@@ -1507,7 +1523,7 @@ export class DiagramaComponent {
       return '';
     }
 
-    const nombreDocumento = this.labelDeOpcion(this.documentosOptions(), docId);
+    const nombreDocumento = this.labelDocumentoOFormulario(docId);
 
     return `/insertar//link/%${nombreDocumento}%${nombreDocumento}/insertar/`;
   }
@@ -1618,7 +1634,7 @@ export class DiagramaComponent {
       const metadato = this.mensajeMetadatosCache
         .get(Number(par.idDocumento))
         ?.find((o) => o.value === par.idMetadato);
-      const nombreDocumento = this.labelDeOpcion(this.documentosOptions(), par.idDocumento);
+      const nombreDocumento = this.labelDocumentoOFormulario(par.idDocumento);
       const nombreMetadato = metadato?.label ?? par.idMetadato;
 
       partes.push(`Doc: ${nombreDocumento} / Meta: ${nombreMetadato}`);
@@ -1799,21 +1815,18 @@ export class DiagramaComponent {
   protected readonly documentosOptions = signal<readonly SelectOption[]>([]);
   protected readonly metadatosOptions = signal<readonly MetadatoOpcion[]>([]);
 
-  protected readonly areasOptions = signal<readonly SelectOption[]>([
-    { label: 'Administración y Finanzas', value: '1' },
-    { label: 'Tecnologías de la Información', value: '2' },
-    { label: 'Recursos Humanos', value: '3' },
-  ]);
+  protected readonly areasOptions = signal<readonly SelectOption[]>([]);
   protected readonly cargosOptions = signal<readonly SelectOption[]>([
     { label: 'Investigador', value: '4' },
     { label: 'Analista', value: '5' },
     { label: 'Jefe de Proyecto', value: '6' },
   ]);
-  protected readonly usuariosOptions = signal<readonly SelectOption[]>([
-    { label: 'soporte', value: 'soporte' },
-    { label: 'admin', value: 'admin' },
-    { label: 'lmarillanca', value: 'lmarillanca' },
-  ]);
+  protected readonly usuariosOptions = computed<readonly SelectOption[]>(() =>
+    this.usuariosLiviano().map((usuario) => ({
+      label: usuario.nombre_completo_usuario.trim(),
+      value: usuario.id_usuario,
+    })),
+  );
 
   protected readonly compartirModalVisible = signal(false);
   protected readonly compartirGrupo = signal<readonly string[]>([]);
@@ -1914,6 +1927,16 @@ export class DiagramaComponent {
 
   constructor() {
     void this.bpmnAdapter.preloadLibrary();
+    // Sincroniza la señal con el estado real de la Fullscreen API (ESC nativo,
+    // barra del sistema, etc.). Fuera de fullscreen la señal vuelve a false.
+    fromEvent(document, 'fullscreenchange')
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        this.diagramaModalPantallaCompleta.set(
+          document.fullscreenElement?.classList.contains('diagrama-modal') ?? false,
+        );
+        setTimeout(() => this.procesoDiagramaPreview?.notificarResize());
+      });
     this.procesoForm.controls.publicaEnCatalogo.valueChanges.subscribe((enabled) => {
       this.updateCatalogosValidators(enabled);
     });
@@ -2026,12 +2049,14 @@ export class DiagramaComponent {
     this.cargarProcesosEjecucion();
     this.cargarProcesos();
     this.cargarRoles();
+    this.cargarGrupos();
     this.cargarFamilias();
     this.cargarMecanismos();
     this.cargarJornadaCalendario();
     this.cargarCatalogosSegunUsuario();
     this.cargarMetadatosReqRol();
     this.cargarUsuariosLiviano();
+    this.cargarOpcionesDocumentosLivianos();
   }
 
   protected onTabChange(index: number): void {
@@ -2069,6 +2094,7 @@ export class DiagramaComponent {
     this.procesoMecanismoError.set('');
     this.procesoAdvertenciaEjecucion.set('');
     this.procesoValidacionError.set([]);
+    this.procesoDiagramaInvalido.set(false);
     this.documentosOptions.set([]);
     this.metadatosOptions.set([]);
     this.formulariosProceso.set([]);
@@ -2099,6 +2125,7 @@ export class DiagramaComponent {
     this.procesoDiagramaXmlBase.set(row.xml ?? '');
     this.procesoMecanismoError.set('');
     this.procesoValidacionError.set([]);
+    this.procesoDiagramaInvalido.set(false);
 
     const procesosEE = row.procesosEE ?? 0;
     this.procesoAdvertenciaEjecucion.set(
@@ -2140,10 +2167,23 @@ export class DiagramaComponent {
   }
 
   protected onCerrarProcesoModal(): void {
+    void this.salirPantallaCompleta();
     this.procesoModalVisible.set(false);
     this.procesoDiagramModalVisible.set(false);
     this.procesoDiagramaMontadoVisible.set(false);
     this.procesoValidacionError.set([]);
+    this.onCerrarDiagramaElementoPanel();
+  }
+
+  protected onDesactivarProceso(row: ProcesoConfiguracion): void {
+    // Simulación de endpoint para futura implementación: se registra la
+    // petición que enviará el endpoint real de desactivación
+    // (POST /rest-gestor/procesos/desactivarProceso).
+    console.log('Simulación DesactivarProceso', {
+      processId: row.id_proceso,
+      active: false,
+      nombreProceso: row.nombre_proceso,
+    });
   }
 
   protected onAbrirDiagramaAsociadoModal(): void {
@@ -2152,9 +2192,55 @@ export class DiagramaComponent {
   }
 
   protected diagramaModalClase(): string {
+    const pantallaCompleta = this.diagramaModalPantallaCompleta()
+      ? ' diagrama-modal--pantalla-completa'
+      : '';
+
     return this.procesoDiagramModalVisible()
-      ? 'diagrama-modal'
-      : 'diagrama-modal diagrama-modal--oculto';
+      ? `diagrama-modal diagrama-modal--fullscreen${pantallaCompleta}`
+      : `diagrama-modal diagrama-modal--fullscreen${pantallaCompleta} diagrama-modal--oculto`;
+  }
+
+  protected async alternarPantallaCompleta(): Promise<void> {
+    if (typeof document === 'undefined' || !document.fullscreenEnabled) {
+      return;
+    }
+
+    if (this.diagramaModalPantallaCompleta()) {
+      await this.salirPantallaCompleta();
+      return;
+    }
+
+    const modal = document.querySelector<HTMLElement>(
+      '.ant-modal.diagrama-modal--fullscreen:not(.diagrama-modal--oculto)',
+    );
+
+    if (!modal) {
+      return;
+    }
+
+    // Optimista: el label del botón, [nzKeyboard] (ESC) y la clase CSS aplican
+    // de inmediato, sin esperar fullscreenchange. fullscreenchange sigue siendo
+    // la fuente de verdad.
+    this.diagramaModalPantallaCompleta.set(true);
+
+    try {
+      await modal.requestFullscreen();
+    } catch {
+      this.diagramaModalPantallaCompleta.set(false);
+    }
+  }
+
+  private async salirPantallaCompleta(): Promise<void> {
+    this.diagramaModalPantallaCompleta.set(false);
+
+    try {
+      if (typeof document !== 'undefined' && document.fullscreenElement !== null) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // Si el navegador ya salió, no hay nada más que hacer.
+    }
   }
 
   private snapshotDiagramaActual(): LegacyBpmnSnapshot | null {
@@ -2167,8 +2253,120 @@ export class DiagramaComponent {
       : this.crearProcesoRequestBuilder.buildLegacyTemplateXml(formValue, usuarioCreador);
   }
 
-  private async resolverLiveXmlProceso(templateXml: string): Promise<string> {
-    return (await this.procesoDiagramaPreview?.exportLegacyXml(templateXml)) ?? templateXml;
+  private async resolverLiveXmlProceso(
+    templateXml: string,
+    formValue: ProcesoModalFormValue,
+  ): Promise<string> {
+    return (
+      (await this.procesoDiagramaPreview?.exportLegacyXml(
+        templateXml,
+        this.construirConfiguracionesLegacyXml(formValue),
+      )) ?? templateXml
+    );
+  }
+
+  private transicionConfigsEfectivos(
+    flujos: readonly LegacyBpmnTransitionSnapshot[],
+  ): Record<string, TransicionConfig> {
+    const efectivos: Record<string, TransicionConfig> = { ...this.transicionConfigs() };
+
+    for (const flujo of flujos) {
+      if (efectivos[flujo.id] !== undefined) {
+        continue;
+      }
+
+      const precargada = this.construirTransicionPrecargada(flujo.sourceId, flujo.targetId);
+
+      if (precargada !== null) {
+        efectivos[flujo.id] = precargada;
+      }
+    }
+
+    return efectivos;
+  }
+
+  private construirConfiguracionesLegacyXml(
+    formValue: ProcesoModalFormValue,
+  ): ConfiguracionesLegacyXml {
+    const snapshot = this.snapshotDiagramaActual();
+
+    return {
+      form: formValue,
+      tareaConfigs: this.tareaConfigs(),
+      transicionConfigs: this.transicionConfigsEfectivos(snapshot?.transitions ?? []),
+      timerConfigs: this.timerConfigs(),
+      mensajeConfigs: this.mensajeConfigs(),
+      decisionConfigs: this.decisionConfigs(),
+      formulariosProceso: this.formulariosProceso(),
+      configDatoSelections: this.configDatoSelections(),
+      mecanismo: this.selectedMecanismo(),
+      resolverMetadato: (idDocumento, clave) =>
+        this.resolverDetalleMetadatoLegacy(idDocumento, clave),
+      resolverDocumento: (idDocumento) => this.resolverDocumentoLegacy(idDocumento),
+    };
+  }
+
+  private resolverDetalleMetadatoLegacy(
+    idDocumento: number,
+    clave: string,
+  ): DetalleMetadatoLegacy | null {
+    const opcion =
+      this.mensajeMetadatosCache.get(idDocumento)?.find((o) => o.value === clave) ?? null;
+
+    if (opcion === null) {
+      return null;
+    }
+
+    const partes = opcion.label.includes(' | ') ? opcion.label.split(' | ') : null;
+
+    return {
+      idMetadato: opcion.idMetadato,
+      idBloque: opcion.idBloque ?? null,
+      codigoBloque: opcion.codigoBloque ?? null,
+      tipo: opcion.tipo ?? null,
+      nombreMetadato: partes !== null ? partes.slice(1).join(' | ') : opcion.label,
+      nombreBloque: partes !== null ? partes[0] : null,
+      esGrilla: opcion.grilla !== undefined && opcion.grilla !== null,
+    };
+  }
+
+  private resolverDocumentoLegacy(idDocumento: number): DocumentoLegacyInfo | null {
+    if (idDocumento <= 0) {
+      return null;
+    }
+
+    const formulario = this.formulariosProceso().find(
+      (f) => f.idFormulario === idDocumento,
+    );
+
+    if (formulario) {
+      return {
+        nombre: formulario.nombre,
+        nombreDocumento: formulario.nombreDocumento ?? formulario.nombre,
+        privado: formulario.visibilidad === 'privado',
+        compartido:
+          (formulario.compartido?.usuario.length ?? 0) > 0 ||
+          (formulario.compartido?.cargo.length ?? 0) > 0 ||
+          (formulario.compartido?.grupo.length ?? 0) > 0,
+        docComunId: formulario.docComunId ?? null,
+      };
+    }
+
+    const opcion = this.documentosProcesoOptions().find(
+      (o) => o.value === String(idDocumento),
+    );
+
+    if (opcion) {
+      return {
+        nombre: opcion.label,
+        nombreDocumento: opcion.label,
+        privado: false,
+        compartido: false,
+        docComunId: null,
+      };
+    }
+
+    return null;
   }
 
   protected validarDiagramaAsociado(): readonly ResultadoValidacionDiagrama[] {
@@ -2187,24 +2385,7 @@ export class DiagramaComponent {
     );
 
     // Transiciones sin config de usuario usan la precarga del REST (usuario gana).
-    const transicionConfigsEfectivos: Record<string, TransicionConfig> = {
-      ...this.transicionConfigs(),
-    };
-
-    for (const flujo of snapshot.transitions) {
-      if (transicionConfigsEfectivos[flujo.id] !== undefined) {
-        continue;
-      }
-
-      const precargada = this.construirTransicionPrecargada(
-        flujo.sourceId,
-        flujo.targetId,
-      );
-
-      if (precargada !== null) {
-        transicionConfigsEfectivos[flujo.id] = precargada;
-      }
-    }
+    const transicionConfigsEfectivos = this.transicionConfigsEfectivos(snapshot.transitions);
 
     const resultados = validarDiagrama(snapshot, {
       tareaConfigs: this.tareaConfigs(),
@@ -2216,6 +2397,9 @@ export class DiagramaComponent {
     });
 
     this.validacionDiagrama.set(resultados);
+    this.procesoDiagramaInvalido.set(
+      resultados.some((resultado) => resultado.nivel === 'error'),
+    );
     this.procesoDiagramaPreview?.marcarErroresValidacion(
       resultados
         .filter((resultado) => resultado.nivel === 'error' && resultado.elementoId !== undefined)
@@ -2226,10 +2410,12 @@ export class DiagramaComponent {
   }
 
   protected onCerrarDiagramaAsociadoModal(): void {
+    void this.salirPantallaCompleta();
     this.procesoDiagramaPreview?.limpiarMarcadoresValidacion();
     // Solo oculta el modal (clase display:none): el visor y su viewport quedan
     // vivos en memoria hasta que termina la sesión del proceso.
     this.procesoDiagramModalVisible.set(false);
+    this.onCerrarDiagramaElementoPanel();
   }
 
   protected onAbrirMecanismoConfigModal(): void {
@@ -2285,6 +2471,16 @@ export class DiagramaComponent {
 
   private labelDeOpcion(options: readonly SelectOption[], value: string): string {
     return options.find((o) => o.value === value)?.label ?? value;
+  }
+
+  private labelDocumentoOFormulario(idDocumento: string): string {
+    const formulario = this.formulariosProcesoOptions().find((o) => o.value === idDocumento);
+
+    if (formulario) {
+      return formulario.label;
+    }
+
+    return this.labelDeOpcion(this.documentosOptions(), idDocumento);
   }
 
   protected updateConfigDato(datoId: number, patch: Partial<ConfigDatoSelection>): void {
@@ -2835,6 +3031,9 @@ export class DiagramaComponent {
   }
 
   protected onProcesoModalDiagramEdited(): void {
+    // Editar el diagrama invalida el resultado de validación previo: se
+    // reevaluará al guardar o al pulsar "Validar diagrama".
+    this.procesoDiagramaInvalido.set(false);
     this.procesoDiagramTouched.set(true);
   }
 
@@ -2853,6 +3052,9 @@ export class DiagramaComponent {
       this.diagramaElementoNombreInput.set(info.nombre);
       this.resetTimerForm(this.timerConfigs()[info.id]);
     } else if (info.kind === 'decision') {
+      // El select de firmar registro filtra por es_firmable (liviano): la
+      // carga es idempotente y queda cacheada.
+      this.cargarOpcionesDocumentosLivianos();
       this.resetDecisionForm(this.decisionConfigs()[info.id]);
     } else if (info.kind === 'transicion') {
       const transaccion = info as BpmnTransicionInfo;
@@ -2868,11 +3070,12 @@ export class DiagramaComponent {
       this.diagramaElementoNombreInput.set(info.nombre);
     }
 
-    this.diagramaElementoModalVisible.set(true);
+    // El panel reduce el ancho del canvas: invalidar el viewbox cacheado
+    // después de que el layout se estabilice.
+    setTimeout(() => this.procesoDiagramaPreview?.notificarResize());
   }
 
-  protected onCerrarDiagramaElementoModal(): void {
-    this.diagramaElementoModalVisible.set(false);
+  protected onCerrarDiagramaElementoPanel(): void {
     this.diagramaElementoSeleccionado.set(null);
     this.diagramaElementoNombreInput.set('');
     this.mensajeSubModal.set(null);
@@ -2882,13 +3085,14 @@ export class DiagramaComponent {
     this.tareaValidacionError.set('');
     this.timerValidacionError.set('');
     this.decisionValidacionError.set('');
+    setTimeout(() => this.procesoDiagramaPreview?.notificarResize());
   }
 
-  protected onConfirmarDiagramaElementoModal(): void {
+  protected onConfirmarDiagramaElementoPanel(): void {
     const elemento = this.diagramaElementoSeleccionado();
 
     if (!elemento) {
-      this.onCerrarDiagramaElementoModal();
+      this.onCerrarDiagramaElementoPanel();
       return;
     }
 
@@ -3007,7 +3211,7 @@ export class DiagramaComponent {
       );
     }
 
-    this.onCerrarDiagramaElementoModal();
+    this.onCerrarDiagramaElementoPanel();
   }
 
   protected mostrarFuncionalidadTarea(): boolean {
@@ -3054,36 +3258,57 @@ export class DiagramaComponent {
     this.procesoValidacionError.set([]);
 
     this.validarCatalogosPublicacion();
-    const camposFaltantes = this.camposObligatoriosFaltantes();
-
-    if (camposFaltantes.length > 0 || this.procesoForm.invalid) {
-      this.procesoForm.markAllAsTouched();
-      if (camposFaltantes.length > 0) {
-        this.procesoValidacionError.set(camposFaltantes);
-      }
-      return;
-    }
-
-    const mecanismoError = this.validarConfiguracionMecanismo();
-    if (mecanismoError !== null) {
-      this.procesoMecanismoError.set(mecanismoError);
-      this.procesoForm.markAllAsTouched();
-      return;
-    }
-
+    // La validación del diagrama corre antes del chequeo de campos: si el
+    // diagrama no cumple las reglas, "Diagrama asociado" queda como campo
+    // obligatorio faltante aunque haya sido abierto/editado en la sesión.
     this.validarDiagramaAsociado();
+    const camposFaltantes = this.camposObligatoriosFaltantes();
     const erroresDiagrama = this.validacionDiagrama().filter(
       (resultado) => resultado.nivel === 'error',
     );
 
-    if (erroresDiagrama.length > 0) {
-      this.procesoValidacionError.set(erroresDiagrama.map((resultado) => resultado.mensaje));
+    // La configuración incompleta del mecanismo (no por defecto) queda listada
+    // en campos faltantes y además activa la alerta específica del mecanismo;
+    // ambas vías bloquean el guardado.
+    this.procesoMecanismoError.set(this.validarConfiguracionMecanismo() ?? '');
+
+    if (camposFaltantes.length > 0 || erroresDiagrama.length > 0 || this.procesoForm.invalid) {
       this.procesoForm.markAllAsTouched();
+      if (camposFaltantes.includes('Diagrama asociado')) {
+        this.procesoDiagramaInvalido.set(true);
+      }
+      if (camposFaltantes.length > 0 || erroresDiagrama.length > 0) {
+        this.procesoValidacionError.set([
+          ...camposFaltantes,
+          ...erroresDiagrama.map((resultado) => resultado.mensaje),
+        ]);
+      }
       return;
     }
 
     const formValue = this.procesoForm.getRawValue();
     const nowIso = new Date().toISOString();
+    const usuarioCreador = USUARIO_CREADOR_PROCESO;
+    const templateXml = this.construirTemplateXmlProceso(formValue, usuarioCreador);
+    let liveXml = templateXml;
+    try {
+      liveXml = await this.resolverLiveXmlProceso(templateXml, formValue);
+    } catch {
+      // El visor BPMN no está inicializado; el proceso conserva el XML base.
+    }
+    let request: CrearProcesoRequest | null = null;
+    try {
+      request = this.crearProcesoRequestBuilder.buildRequest(
+        formValue,
+        liveXml,
+        usuarioCreador,
+        this.tareaConfigs(),
+        this.formulariosProceso(),
+        this.construirExtrasCrearProceso(formValue),
+      );
+    } catch {
+      // El visor BPMN no está inicializado; se omite la construcción del request.
+    }
     const payload = {
       mode: this.procesoModalMode(),
       id_proceso: this.procesoEditId(),
@@ -3106,6 +3331,7 @@ export class DiagramaComponent {
       diagrama: {
         xmlBase: this.procesoEditSourceXml(),
         modificadoEnSesion: this.procesoDiagramTouched(),
+        xmlLive: liveXml,
       },
       configuracionMecanismo: this.buildMecanismoConfigPayload(),
       proceso_compartido:
@@ -3122,7 +3348,7 @@ export class DiagramaComponent {
         id_proceso: nextId,
         modificado_por: 'usuario.local',
         distribucion_requerida: false,
-        xml: this.procesoEditSourceXml(),
+        xml: liveXml,
         nombre_proceso: formValue.nombre.trim(),
         id_organigrama: 0,
         ultima_modificacion: nowIso,
@@ -3147,6 +3373,7 @@ export class DiagramaComponent {
 
             return {
               ...item,
+              xml: liveXml,
               nombre_proceso: formValue.nombre.trim(),
               ultima_modificacion: nowIso,
               privado: formValue.visibilidad === 'privado',
@@ -3161,30 +3388,17 @@ export class DiagramaComponent {
     }
 
     console.log('Submit simulado Crear/Editar proceso', payload);
-
-    const usuarioCreador = USUARIO_CREADOR_PROCESO;
-    const templateXml = this.construirTemplateXmlProceso(formValue, usuarioCreador);
-
-    try {
-      const liveXml = await this.resolverLiveXmlProceso(templateXml);
-      const request = this.crearProcesoRequestBuilder.buildRequest(
-        formValue,
-        liveXml,
-        usuarioCreador,
-        this.tareaConfigs(),
-        this.formulariosProceso(),
-        this.construirExtrasCrearProceso(formValue),
-      );
+    if (request !== null) {
       console.log('CrearProcesoRequest', request);
-    } catch {
-      // El visor BPMN no está inicializado; se omite la construcción del request.
     }
 
     this.procesoModalVisible.set(false);
     this.procesoDiagramModalVisible.set(false);
     // Termina la sesión del proceso: el visor se destruye y la próxima sesión
     // parte desde el seed correspondiente.
+    void this.salirPantallaCompleta();
     this.procesoDiagramaMontadoVisible.set(false);
+    this.onCerrarDiagramaElementoPanel();
   }
 
   protected procesoModalTitulo(): string {
@@ -3264,10 +3478,12 @@ export class DiagramaComponent {
 
   protected abrirCrudFormularios(): void {
     this.cargarOpcionesDocumentosLivianos();
+    this.formulariosCrudAviso.set([]);
     this.crudFormulariosModalAbierto.set(true);
   }
 
   protected cerrarCrudFormularios(): void {
+    this.formulariosCrudAviso.set([]);
     this.crudFormulariosModalAbierto.set(false);
   }
 
@@ -3284,10 +3500,18 @@ export class DiagramaComponent {
             value: String(doc.id),
           })),
         );
+        this.documentosLivianoFirmables.set(
+          new Set(
+            respuesta.documentos
+              .filter((doc) => doc.es_firmable === true)
+              .map((doc) => String(doc.id)),
+          ),
+        );
         this.documentosLivianoCargando.set(false);
       },
       error: () => {
         this.documentosLivianoOptions.set([]);
+        this.documentosLivianoFirmables.set(new Set());
         this.documentosLivianoCargando.set(false);
       },
     });
@@ -3299,6 +3523,7 @@ export class DiagramaComponent {
     this.formularioEditDocumentoValor.set(null);
     this.formularioEditVisibilidad.set('privado');
     this.formularioEditEnviado.set(false);
+    this.formularioEditAviso.set('');
     this.formularioEditModalAbierto.set(true);
     this.enfocarInputNombreFormulario();
   }
@@ -3315,6 +3540,7 @@ export class DiagramaComponent {
     );
     this.formularioEditVisibilidad.set(fila.visibilidad);
     this.formularioEditEnviado.set(false);
+    this.formularioEditAviso.set('');
     this.formularioEditModalAbierto.set(true);
     this.enfocarInputNombreFormulario();
   }
@@ -3369,14 +3595,37 @@ export class DiagramaComponent {
         },
       ]);
     } else {
+      const filaActual = this.formulariosProceso().find((f) => f.id === id);
+
+      if (filaActual === undefined) {
+        this.formularioEditModalAbierto.set(false);
+        return;
+      }
+
+      const usos =
+        filaActual.idFormulario !== 0
+          ? usosFormularioProceso(filaActual.idFormulario, this.usosFormularioInput())
+          : [];
+      const documentoBloqueado = usos.length > 0 && idFormulario !== filaActual.idFormulario;
+
+      if (documentoBloqueado) {
+        this.formularioEditAviso.set(
+          `No se puede cambiar el documento del formulario: está en uso (${usos.join(', ')}). Se guardó el nombre y la visibilidad manteniendo el documento.`,
+        );
+      } else {
+        this.formularioEditAviso.set('');
+      }
+
       this.formulariosProceso.update((lista) =>
         lista.map((f) =>
           f.id === id
             ? {
                 ...f,
                 nombre,
-                idFormulario,
-                nombreDocumento: documento?.label,
+                idFormulario: documentoBloqueado ? filaActual.idFormulario : idFormulario,
+                nombreDocumento: documentoBloqueado
+                  ? filaActual.nombreDocumento
+                  : documento?.label,
                 visibilidad,
                 compartido: visibilidad === 'privado' ? f.compartido : undefined,
               }
@@ -3452,12 +3701,55 @@ export class DiagramaComponent {
   }
 
   protected eliminarFilaFormularioProceso(id: string): void {
+    const fila = this.formulariosProceso().find((f) => f.id === id);
+
+    if (fila === undefined) {
+      return;
+    }
+
+    const usos = usosFormularioProceso(fila.idFormulario, this.usosFormularioInput());
+
+    if (usos.length > 0) {
+      // Un formulario en uso no puede eliminarse: traspasos, reglas de negocio,
+      // timers, mensajes, decisiones o el mecanismo lo referencian.
+      this.formulariosCrudAviso.set(usos);
+      return;
+    }
+
     this.formulariosProceso.update((lista) => lista.filter((f) => f.id !== id));
+    this.formulariosCrudAviso.set([]);
     if (this.formularioSeleccionadoId() === id) {
       this.formularioSeleccionadoId.set(null);
       this.metadatosTrabajo.set([]);
       this.traspasosTrabajo.set([]);
     }
+
+    if (fila.idFormulario !== 0 && this.traspasoOrigenFormularioId() === fila.idFormulario) {
+      this.traspasoOrigenFormularioId.set(null);
+      this.traspasoOrigenSeleccion.set(null);
+      this.traspasoDestinoSeleccion.set(null);
+    }
+  }
+
+  private usosFormularioInput(): UsosFormularioProcesoInput {
+    return {
+      tareaConfigs: this.tareaConfigs(),
+      timerConfigs: this.timerConfigs(),
+      mensajeConfigs: this.mensajeConfigs(),
+      decisionConfigs: this.decisionConfigs(),
+      transicionConfigs: this.transicionConfigs(),
+      configDatoSelections: this.configDatoSelections(),
+    };
+  }
+
+  protected usosFormularioFila(fila: FormularioProcesoConfig): readonly string[] {
+    return usosFormularioProceso(fila.idFormulario, this.usosFormularioInput());
+  }
+
+  protected tooltipEliminarFormulario(fila: FormularioProcesoConfig): string {
+    const usos = this.usosFormularioFila(fila);
+
+    return usos.length > 0 ? `En uso en: ${usos.join(', ')}` : 'Eliminar';
   }
 
   protected seleccionarFormularioProceso(id: string): void {
@@ -4021,6 +4313,8 @@ export class DiagramaComponent {
         formValue.visibilidad === 'privado' ? this.buildProcesoCompartidoPayload() : null,
       transicionConfigs: transicionConfigsEfectivos,
       decisionConfigs: this.decisionConfigs(),
+      timerConfigs: this.timerConfigs(),
+      mensajeConfigs: this.mensajeConfigs(),
       resolverMetadato: (idDocumento, clave) => this.resolverOpcionMetadato(idDocumento, clave),
       resolverMetadatoRol: (idRol, idMetadato) =>
         this.resolverOpcionMetadatoRol(idRol, idMetadato),
@@ -4036,11 +4330,20 @@ export class DiagramaComponent {
       return null;
     }
 
+    const grilla = opcion.grilla ?? null;
+
     return {
       idMetadato: opcion.idMetadato,
       idBloque: opcion.idBloque ?? null,
       codigoBloque: opcion.codigoBloque ?? null,
       tipo: opcion.tipo ?? null,
+      esGrilla: grilla !== null,
+      columnasGrilla: grilla?.columnas.map((columna) => ({
+        idColumnaGrilla: columna.id_columna_grilla,
+        datafield: columna.datafield,
+        tipoDato: columna.tipo_dato,
+        titulo: columna.titulo,
+      })),
     };
   }
 
@@ -4081,7 +4384,7 @@ export class DiagramaComponent {
     return opciones;
   }
 
-  protected documentosReglasProceso(): readonly SelectOption[] {
+  protected formulariosProcesoOptions(): readonly SelectOption[] {
     const opciones: SelectOption[] = [];
     const vistos = new Set<string>();
 
@@ -4096,6 +4399,19 @@ export class DiagramaComponent {
         value: String(fila.idFormulario),
       });
     }
+
+    return opciones;
+  }
+
+  protected formulariosFirmablesOptions(): readonly SelectOption[] {
+    const firmables = this.documentosLivianoFirmables();
+
+    return this.formulariosProcesoOptions().filter((opcion) => firmables.has(opcion.value));
+  }
+
+  protected documentosReglasProceso(): readonly SelectOption[] {
+    const opciones = [...this.formulariosProcesoOptions()];
+    const vistos = new Set(opciones.map((opcion) => opcion.value));
 
     for (const opcion of this.documentosOptions()) {
       if (!vistos.has(opcion.value)) {
@@ -4224,6 +4540,19 @@ export class DiagramaComponent {
           { label: 'Jefe de Proyecto', value: '6' },
         ]);
       },
+    });
+  }
+
+  private cargarGrupos(): void {
+    this.diagramaService.obtenerGrupos().subscribe({
+      next: (grupos) =>
+        this.areasOptions.set(
+          grupos.map((grupo) => ({
+            label: grupo.nombre_grupo,
+            value: String(grupo.id_grupo),
+          })),
+        ),
+      error: () => this.areasOptions.set([]),
     });
   }
 
@@ -4600,17 +4929,37 @@ export class DiagramaComponent {
         faltantes.push('Calendario');
       }
     }
-    if (!this.procesoDiagramTouched() && this.procesoEditSourceXml().trim() === '') {
+    const snapshotDiagrama = this.snapshotDiagramaActual();
+    if (
+      this.procesoDiagramaInvalido() ||
+      (snapshotDiagrama !== null && snapshotDiagrama.nodes.length === 0) ||
+      (!this.procesoDiagramTouched() && this.procesoEditSourceXml().trim() === '')
+    ) {
+      // Un proceso no puede no tener diagrama: sin diagrama dibujado o con
+      // errores de validación pendientes, "Diagrama asociado" queda como campo
+      // obligatorio faltante.
       faltantes.push('Diagrama asociado');
+    }
+
+    const mecanismo = this.selectedMecanismo();
+    if (
+      mecanismo !== null &&
+      mecanismo.por_defecto === false &&
+      this.configuracionMecanismoIncompleta()
+    ) {
+      // El mecanismo no por defecto exige su configuración completa: sin ella
+      // queda como campo obligatorio pendiente de configurar.
+      faltantes.push('Mecanismo de denominación (configuración)');
     }
 
     return faltantes;
   }
 
-  private validarConfiguracionMecanismo(): string | null {
+  private configuracionMecanismoIncompleta(): boolean {
     const mecanismo = this.selectedMecanismo();
+
     if (mecanismo === null || mecanismo.por_defecto !== false) {
-      return null;
+      return false;
     }
 
     const selections = this.configDatoSelections();
@@ -4623,23 +4972,27 @@ export class DiagramaComponent {
       const tipo = sel?.tipo ?? '';
 
       if (tipo === '') {
-        return 'La configuración del mecanismo de denominación está incompleta. Configura todos los datos requeridos (icono de configuración).';
+        return true;
       }
 
-      if (tipo === 'metadato_formulario') {
-        if (!sel?.documento || !sel?.metadato) {
-          return 'La configuración del mecanismo de denominación está incompleta. Configura todos los datos requeridos (icono de configuración).';
-        }
+      if (tipo === 'metadato_formulario' && (!sel?.documento || !sel?.metadato)) {
+        return true;
       }
 
-      if (tipo === 'texto_fijo') {
-        if (!sel?.valor || sel.valor.trim() === '') {
-          return 'La configuración del mecanismo de denominación está incompleta. Configura todos los datos requeridos (icono de configuración).';
-        }
+      if (tipo === 'texto_fijo' && (!sel?.valor || sel.valor.trim() === '')) {
+        return true;
       }
     }
 
-    return null;
+    return false;
+  }
+
+  private validarConfiguracionMecanismo(): string | null {
+    if (!this.configuracionMecanismoIncompleta()) {
+      return null;
+    }
+
+    return 'La configuración del mecanismo de denominación está incompleta. Configura todos los datos requeridos (icono de configuración).';
   }
 
   private buildDraftFromProceso(row: ProcesoConfiguracion): ProcesoModalFormValue {

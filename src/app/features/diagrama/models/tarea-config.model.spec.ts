@@ -1,4 +1,4 @@
-import { esCombinacionTraspasoValida } from './tarea-config.model';
+import { esCombinacionTraspasoValida, TAREA_FUNCIONALIDAD_OPTIONS } from './tarea-config.model';
 
 describe('esCombinacionTraspasoValida', () => {
   it('acepta todas las combinaciones válidas de la matriz', () => {
@@ -46,5 +46,21 @@ describe('esCombinacionTraspasoValida', () => {
   it('rechaza tipos vacíos', () => {
     expect(esCombinacionTraspasoValida('', 'ALF')).toBeFalse();
     expect(esCombinacionTraspasoValida('ALF', '')).toBeFalse();
+  });
+});
+
+describe('TAREA_FUNCIONALIDAD_OPTIONS', () => {
+  it('solo "cmf" (Completar formulario) está habilitada', () => {
+    const habilitadas = TAREA_FUNCIONALIDAD_OPTIONS.filter((o) => o.disabled !== true);
+
+    expect(habilitadas.map((o) => o.value)).toEqual(['cmf']);
+  });
+
+  it('las opciones futuras deshabilitadas incluyen aviso de futura implementación', () => {
+    for (const opcion of TAREA_FUNCIONALIDAD_OPTIONS.filter((o) => o.disabled === true)) {
+      expect(opcion.avisoFuturaImplementacion)
+        .withContext(opcion.value)
+        .toBeTruthy();
+    }
   });
 });

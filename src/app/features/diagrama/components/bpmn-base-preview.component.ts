@@ -25,6 +25,7 @@ import {
   resolverBpmnTransicionInfo,
 } from '../models/bpmn-elemento.model';
 import { LegacyXmlSerializerService } from '../services/legacy-xml-serializer.service';
+import type { ConfiguracionesLegacyXml } from '../models/legacy-xml-configuraciones.model';
 import { CUSTOM_BPMN_MODULES } from './bpmn-custom';
 
 type LegacyElementKind =
@@ -199,17 +200,36 @@ export class BpmnBasePreviewComponent implements AfterViewInit, OnDestroy {
     this.destroyModeler();
   }
 
-  async exportLegacyXml(templateXml: string): Promise<string> {
+  async exportLegacyXml(
+    templateXml: string,
+    configuraciones?: ConfiguracionesLegacyXml,
+  ): Promise<string> {
     if (!this.modeler) {
       throw new Error('El modelador BPMN no está inicializado.');
     }
 
     const snapshot = this.buildLegacySnapshot();
-    return this.legacyXmlSerializer.serializeFromSnapshot(templateXml, snapshot);
+    return this.legacyXmlSerializer.serializeFromSnapshot(templateXml, snapshot, configuraciones);
   }
 
   obtenerSnapshot(): LegacyBpmnSnapshot {
     return this.buildLegacySnapshot();
+  }
+
+  notificarResize(): void {
+    if (!this.modeler) {
+      return;
+    }
+
+    try {
+      const canvas = this.modeler.get('canvas') as {
+        resized?: () => void;
+      } | undefined;
+
+      canvas?.resized?.();
+    } catch {
+      // Ignore non-critical viewport recalculations when the canvas is unavailable.
+    }
   }
 
   marcarErroresValidacion(ids: readonly string[]): void {

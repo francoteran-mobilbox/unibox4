@@ -20,6 +20,7 @@ import {
   MetadatoRequeridoRol,
   ObtenerDocumentosLivianoResponse,
   ObtenerUsuariosLivianoResponse,
+  GrupoRaw,
 } from '../models/diagrama.model';
 
 const PROCESOS_EJECUCION_PATH =
@@ -35,6 +36,7 @@ const DOCUMENTO_LIVIANO_CONFIGURACION_PATH =
 const TAREAS_PROCESO_PATH = '/rest-gestor/activities/obtenerTareasProceso/';
 const METADATOS_REQ_ROL_PATH = '/rest-gestor/metadatoReqRol/obtenerMetadatosReqRol';
 const USUARIOS_LIVIANO_PATH = '/rest-usuario/usuario/obtenerUsuariosLiviano';
+const GRUPOS_PATH = '/rest-gestor/grupo/obtenerGrupos';
 const METADATOS_REQUERIDOS_DOCUMENTO_PATH =
   '/rest-gestor/metadatoRequeridoDocumento/obtenerMRDPorIdDoc/';
 const USUARIO_ACTUAL_ID = 'soportemovilgo';
@@ -66,6 +68,10 @@ export class DiagramaService {
 
   obtenerRoles(): Observable<RolRaw[]> {
     return this.http.get<RolRaw[]>(this.buildUrl('/rest-gestor/rol/obtenerRoles'));
+  }
+
+  obtenerGrupos(): Observable<GrupoRaw[]> {
+    return this.http.get<GrupoRaw[]>(this.buildUrl(GRUPOS_PATH));
   }
 
   getFamiliasProceso(): Observable<FamiliaRaw[]> {
@@ -109,7 +115,7 @@ export class DiagramaService {
 
   obtenerDocumentosLivianoConfiguracion(): Observable<ObtenerDocumentosLivianoResponse> {
     return this.http.get<ObtenerDocumentosLivianoResponse>(
-      this.buildUrl(DOCUMENTO_LIVIANO_CONFIGURACION_PATH),
+      this.buildLocalUrl(DOCUMENTO_LIVIANO_CONFIGURACION_PATH),
     );
   }
 

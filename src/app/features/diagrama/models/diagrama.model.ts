@@ -352,6 +352,7 @@ export interface ActividadTareaProceso {
 
 export interface DocumentoLiviano {
   readonly inserta_marca_agua: boolean;
+  readonly es_firmable: boolean;
   readonly nombre_documento: string;
   readonly config_doc_genera_firma: { readonly es_grilla: boolean };
   readonly version: number;
@@ -400,6 +401,13 @@ export interface MetadatoRequeridoDocumento {
 export interface RolRaw {
   readonly id_rol: number;
   readonly nombre_rol: string;
+}
+
+export interface GrupoRaw {
+  readonly id_grupo: number;
+  readonly nombre_grupo: string;
+  readonly sigla_grupo: string;
+  readonly lista_permisos_grupo: readonly unknown[];
 }
 
 export interface FamiliaRaw {

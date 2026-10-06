@@ -167,16 +167,22 @@
             <span nz-icon nzType="search" nzTheme="outline"></span>
           </ng-template>
 
-          <button
-            nz-button
-            nzType="primary"
-            class="diagrama__create"
-            aria-label="Crear proceso"
-            (click)="onAbrirCrearProcesoModal()"
-          >
-            <span nz-icon nzType="plus" nzTheme="outline"></span>
-            Crear Proceso
-          </button>
+          @if (isDesktop()) {
+            <button
+              nz-button
+              nzType="primary"
+              class="diagrama__create"
+              aria-label="Crear proceso"
+              (click)="onAbrirCrearProcesoModal()"
+            >
+              <span nz-icon nzType="plus" nzTheme="outline"></span>
+              Crear Proceso
+            </button>
+          } @else {
+            <span class="diagrama__mobile-info">
+              Crear y editar procesos está disponible solo en versión escritorio.
+            </span>
+          }
 
           <button
             nz-button
@@ -259,16 +265,36 @@
                   </nz-tag>
                 </td>
                 <td class="diagrama__actions-col">
+                  @if (isDesktop()) {
+                    <button
+                      nz-button
+                      nzType="text"
+                      nz-tooltip
+                      nzTooltipTitle="Editar proceso"
+                      nzTooltipPlacement="bottom"
+                      aria-label="Editar proceso"
+                      (click)="onAbrirEditarProcesoModal(row)"
+                    >
+                      <span nz-icon nzType="setting" nzTheme="outline"></span>
+                    </button>
+                  }
                   <button
+                    nz-popconfirm
+                    nzPopconfirmTitle="¿Desactivar este proceso?"
+                    nzOkText="Desactivar"
+                    nzOkDanger
+                    nzCancelText="Cancelar"
+                    nzPopconfirmPlacement="bottomRight"
+                    (nzOnConfirm)="onDesactivarProceso(row)"
                     nz-button
                     nzType="text"
+                    nzDanger
                     nz-tooltip
-                    nzTooltipTitle="Editar proceso"
+                    nzTooltipTitle="Desactivar proceso"
                     nzTooltipPlacement="bottom"
-                    aria-label="Editar proceso"
-                    (click)="onAbrirEditarProcesoModal(row)"
+                    aria-label="Desactivar proceso"
                   >
-                    <span nz-icon nzType="setting" nzTheme="outline"></span>
+                    <span nz-icon nzType="stop" nzTheme="outline"></span>
                   </button>
                 </td>
               </tr>
@@ -527,6 +553,7 @@
               nzTooltipTitle="Abrir diagrama asociado"
               (click)="onAbrirDiagramaAsociadoModal()"
               type="button"
+              [class.diagrama__boton-diagrama-invalido]="procesoDiagramaInvalido()"
             >
               <nz-icon nzType="fork" nzTheme="outline" />
               Abrir diagrama asociado
@@ -542,9 +569,10 @@
     <nz-modal
       [nzVisible]="procesoDiagramaMontadoVisible()"
       nzTitle="Diagrama asociado"
-      [nzWidth]="isDesktop() ? 1100 : 'calc(100vw - 32px)'"
+      [nzWidth]="isDesktop() ? '95vw' : 'calc(100vw - 32px)'"
       [nzClassName]="diagramaModalClase()"
       [nzMaskClosable]="false"
+      [nzKeyboard]="!diagramaModalPantallaCompleta()"
       (nzOnCancel)="onCerrarDiagramaAsociadoModal()"
       [nzFooter]="diagramaAsociadoFooter"
     >
@@ -558,6 +586,7 @@
             [nzDescription]="tplValidacionDiagrama"
             [nzCloseable]="true"
             (nzOnClose)="validacionDiagrama.set([])"
+            style="max-height: 150px; overflow: auto;"
           >
           </nz-alert>
           <ng-template #tplValidacionDiagrama>
@@ -572,14 +601,60 @@
           </ng-template>
         }
         @if (isDesktop()) {
-          <app-bpmn-base-preview
-            #procesoDiagramaPreview
-            class="diagrama__bpmn-preview"
-            [legacyXml]="procesoDiagramaXmlBase()"
-            [editable]="true"
-            (diagramEdited)="onProcesoModalDiagramEdited()"
-            (elementActivated)="onDiagramaElementoActivado($event)"
-          />
+          <div class="diagrama__editor-principal">
+            <div class="diagrama__editor-canvas">
+              <app-bpmn-base-preview
+                #procesoDiagramaPreview
+                class="diagrama__bpmn-preview"
+                [legacyXml]="procesoDiagramaXmlBase()"
+                [editable]="true"
+                (diagramEdited)="onProcesoModalDiagramEdited()"
+                (elementActivated)="onDiagramaElementoActivado($event)"
+              />
+            </div>
+
+            @if (diagramaElementoSeleccionado() !== null) {
+              <aside class="diagrama__editor-panel">
+                <div class="diagrama__editor-panel-cabecera">
+                  <span
+                    class="diagrama__editor-panel-titulo"
+                    nz-tooltip
+                    [nzTooltipTitle]="diagramaElementoPanelTitulo()"
+                  >{{ diagramaElementoPanelTitulo() }}</span>
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    nz-tooltip
+                    nzTooltipTitle="Cerrar panel"
+                    nzTooltipPlacement="bottom"
+                    aria-label="Cerrar panel"
+                    (click)="onCerrarDiagramaElementoPanel()"
+                  >
+                    <span nz-icon nzType="close" nzTheme="outline"></span>
+                  </button>
+                </div>
+
+                <div class="diagrama__editor-panel-cuerpo">
+                  <ng-container [ngTemplateOutlet]="diagramaElementoPanelContenido" />
+                </div>
+
+                <div class="diagrama__editor-panel-pie">
+                  <button nz-button type="button" (click)="onCerrarDiagramaElementoPanel()">
+                    Cancelar
+                  </button>
+                  <button
+                    nz-button
+                    nzType="primary"
+                    type="button"
+                    (click)="onConfirmarDiagramaElementoPanel()"
+                  >
+                    Listo
+                  </button>
+                </div>
+              </aside>
+            }
+          </div>
         } @else {
           <span class="diagrama__mobile-info">Diagrama disponible solo en versión escritorio.</span>
         }
@@ -591,23 +666,20 @@
         <span nz-icon nzType="check-square"></span>
         Validar diagrama
       </button>
+      <button nz-button type="button" (click)="alternarPantallaCompleta()">
+        <span
+          nz-icon
+          [nzType]="diagramaModalPantallaCompleta() ? 'compress' : 'expand'"
+          nzTheme="outline"
+        ></span>
+        {{ diagramaModalPantallaCompleta() ? 'Salir de pantalla completa' : 'Ver en pantalla completa' }}
+      </button>
       <button nz-button nzType="primary" type="button" (click)="onCerrarDiagramaAsociadoModal()">
         Listo
       </button>
     </ng-template>
 
-    <nz-modal
-      [nzVisible]="diagramaElementoModalVisible()"
-      [nzTitle]="diagramaElementoModalTitulo()"
-      [nzWidth]="isDesktop() ? 800 : 'calc(100vw - 32px)'"
-      nzClassName="diagrama-elemento-modal"
-      [nzMaskClosable]="false"
-      nzOkText="Listo"
-      nzCancelText="Cancelar"
-      (nzOnCancel)="onCerrarDiagramaElementoModal()"
-      (nzOnOk)="onConfirmarDiagramaElementoModal()"
-    >
-      <ng-container *nzModalContent>
+    <ng-template #diagramaElementoPanelContenido>
         @if (diagramaElementoSeleccionado()?.kind === 'tarea') {
           @if (tareaValidacionError()) {
             <nz-alert
@@ -649,7 +721,7 @@
 
               <div class="diagrama__field">
                 <span class="diagrama__field-label">Cargo *</span>
-                <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear>
+                <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear nzShowSearch>
                   @for (option of cargosOptions(); track option.value) {
                     <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
                   }
@@ -695,7 +767,12 @@
                     nzAllowClear
                   >
                     @for (option of tareaFuncionalidadOptions; track option.value) {
-                      <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                      <nz-option
+                        [nzValue]="option.value"
+                        [nzLabel]="option.label"
+                        [nzDisabled]="option.disabled === true"
+                        [nzTitle]="option.avisoFuturaImplementacion ?? option.label"
+                      />
                     }
                   </nz-select>
                 </div>
@@ -912,24 +989,24 @@
                   <nz-icon nzType="file-text" nzTheme="outline" />
                 </button>
               </div>
-              <quill-editor
+              <!-- <quill-editor
                 class="diagrama__mensaje-editor-inline"
                 formControlName="contenido"
                 [modules]="quillModules"
                 style="height: 200px"
                 (editorCreated)="onQuillEditorCreated($event)"
-              />
+              /> -->
             </div>
 
-            <div class="diagrama__field diagrama__field--full" style="margin-top: 50px;">
+            <div class="diagrama__field diagrama__field--full">
               <span class="diagrama__field-label">Adjuntar PDF</span>
               <nz-select
                 formControlName="adjuntarPdfIds"
                 nzMode="multiple"
-                nzPlaceHolder="Documentos del proceso"
+                nzPlaceHolder="Formularios de proceso"
                 nzAllowClear
               >
-                @for (option of documentosOptions(); track option.value) {
+                @for (option of formulariosProcesoOptions(); track option.value) {
                   <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
                 }
               </nz-select>
@@ -1027,10 +1104,10 @@
               <div class="diagrama__config-subrow">
                 <nz-select
                   formControlName="idDocumento"
-                  nzPlaceHolder="Documento *"
+                  nzPlaceHolder="Formulario de proceso *"
                   nzAllowClear
                 >
-                  @for (doc of documentosOptions(); track doc.value) {
+                  @for (doc of formulariosProcesoOptions(); track doc.value) {
                     <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                   }
                 </nz-select>
@@ -1091,7 +1168,7 @@
 
               <div class="diagrama__field">
                 <span class="diagrama__field-label">Cargo *</span>
-                <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear>
+                <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear nzShowSearch>
                   @for (option of cargosOptions(); track option.value) {
                     <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
                   }
@@ -1146,10 +1223,10 @@
                   <span class="diagrama__field-label">Documento *</span>
                   <nz-select
                     formControlName="documento"
-                    nzPlaceHolder="Selecciona documento"
+                    nzPlaceHolder="Formulario de proceso *"
                     nzAllowClear
                   >
-                    @for (doc of documentosOptions(); track doc.value) {
+                    @for (doc of formulariosFirmablesOptions(); track doc.value) {
                       <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                     }
                   </nz-select>
@@ -1318,10 +1395,10 @@
                     <div class="diagrama__config-subrow">
                       <nz-select
                         formControlName="idDocumento"
-                        nzPlaceHolder="Documento *"
+                        nzPlaceHolder="Formulario de proceso *"
                         nzAllowClear
                       >
-                        @for (doc of documentosOptions(); track doc.value) {
+                        @for (doc of formulariosProcesoOptions(); track doc.value) {
                           <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                         }
                       </nz-select>
@@ -1581,8 +1658,7 @@
             />
           </div>
         }
-      </ng-container>
-    </nz-modal>
+    </ng-template>
 
     <nz-modal
       [nzVisible]="mensajeSubModal() === 'destinatarios'"
@@ -1636,11 +1712,11 @@
               <div class="diagrama__mensaje-par-row" [formGroup]="par">
                 <nz-select
                   formControlName="idDocumento"
-                  nzPlaceHolder="Documento"
+                  nzPlaceHolder="Formulario de proceso"
                   nzAllowClear
                   class="diagrama__mensaje-par-doc"
                 >
-                  @for (option of documentosOptions(); track option.value) {
+                  @for (option of formulariosProcesoOptions(); track option.value) {
                     <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
                   }
                 </nz-select>
@@ -1706,11 +1782,11 @@
           <nz-select
             [ngModel]="mensajeTokenDocumentoSeleccionado()"
             (ngModelChange)="onMensajeTokenDocumentoChange($event)"
-            nzPlaceHolder="Documento"
+            nzPlaceHolder="Formulario de proceso"
             nzAllowClear
             class="diagrama__mensaje-token-select"
           >
-            @for (option of documentosOptions(); track option.value) {
+            @for (option of formulariosProcesoOptions(); track option.value) {
               <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
             }
           </nz-select>
@@ -1770,11 +1846,11 @@
           <nz-select
             [ngModel]="mensajeTokenDocumentoSeleccionado()"
             (ngModelChange)="onMensajeTokenDocumentoChange($event)"
-            nzPlaceHolder="Documento"
+            nzPlaceHolder="Formulario de proceso"
             nzAllowClear
             class="diagrama__mensaje-token-select"
           >
-            @for (option of documentosOptions(); track option.value) {
+            @for (option of formulariosProcesoOptions(); track option.value) {
               <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
             }
           </nz-select>
@@ -1813,7 +1889,7 @@
           <quill-editor
             formControlName="contenido"
             [modules]="quillModules"
-            style="height: 260px"
+            style="height: 260px; width: stretch;"
             (editorCreated)="onQuillEditorCreated($event)"
           />
         </div>
@@ -1824,11 +1900,11 @@
             <nz-select
               [ngModel]="mensajeTokenLinkDocumentoSeleccionado()"
               (ngModelChange)="mensajeTokenLinkDocumentoSeleccionado.set($event)"
-              nzPlaceHolder="Documento"
+              nzPlaceHolder="Formulario de proceso"
               nzAllowClear
               class="diagrama__mensaje-token-select"
             >
-              @for (option of documentosOptions(); track option.value) {
+              @for (option of formulariosProcesoOptions(); track option.value) {
                 <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
               }
             </nz-select>
@@ -1963,9 +2039,9 @@
                       (ngModelChange)="
                         onConfigDatoDocumentoChange(dato.id_dato_req_mecanismo, $event)
                       "
-                      nzPlaceHolder="Documento"
+                      nzPlaceHolder="Formulario de proceso"
                     >
-                      @for (doc of documentosOptions(); track doc.value) {
+                      @for (doc of formulariosProcesoOptions(); track doc.value) {
                         <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                       }
                     </nz-select>
@@ -2238,6 +2314,25 @@
             </button>
           </div>
 
+          @if (formulariosCrudAviso().length > 0) {
+            <nz-alert
+              nzType="warning"
+              nzShowIcon
+              class="diagrama__alert"
+              nzMessage="No se puede eliminar el formulario"
+              [nzDescription]="tplUsosFormularioCrud"
+              [nzCloseable]="true"
+              (nzOnClose)="formulariosCrudAviso.set([])"
+            />
+            <ng-template #tplUsosFormularioCrud>
+              <ul class="diagrama__validation-list">
+                @for (uso of formulariosCrudAviso(); track uso) {
+                  <li>{{ uso }}</li>
+                }
+              </ul>
+            </ng-template>
+          }
+
           @if (formulariosProceso().length === 0) {
             <div class="diagrama__crud-vacio">
               <nz-empty nzNotFoundContent="No hay formularios de proceso">
@@ -2335,26 +2430,24 @@
                           <span nz-icon nzType="share-alt" nzTheme="outline"></span>
                         </button>
                       }
-                      <nz-popconfirm
+                      <button
+                        nz-popconfirm
                         nzPopconfirmTitle="¿Eliminar este formulario?"
                         nzOkText="Eliminar"
                         nzOkDanger
                         nzCancelText="Cancelar"
                         nzPopconfirmPlacement="bottomRight"
                         (nzOnConfirm)="eliminarFilaFormularioProceso(fila.id)"
+                        nz-button
+                        nzType="text"
+                        nzDanger
+                        nz-tooltip
+                        [nzTooltipTitle]="tooltipEliminarFormulario(fila)"
+                        aria-label="Eliminar formulario"
+                        [disabled]="usosFormularioFila(fila).length > 0"
                       >
-                        <button
-                          nz-popconfirm
-                          nz-button
-                          nzType="text"
-                          nzDanger
-                          nz-tooltip
-                          nzTooltipTitle="Eliminar"
-                          aria-label="Eliminar formulario"
-                        >
-                          <span nz-icon nzType="delete" nzTheme="outline"></span>
-                        </button>
-                      </nz-popconfirm>
+                        <span nz-icon nzType="delete" nzTheme="outline"></span>
+                      </button>
                     </td>
                   </tr>
                 }
@@ -2374,6 +2467,14 @@
       [nzFooter]="formularioEditFooter"
     >
       <ng-container *nzModalContent>
+        @if (formularioEditAviso() !== '') {
+          <nz-alert
+            nzType="warning"
+            nzShowIcon
+            class="diagrama__alert"
+            [nzMessage]="formularioEditAviso()"
+          />
+        }
         <div class="diagrama__ff-edit">
           <div class="diagrama__field diagrama__field--full">
             <span class="diagrama__field-label">

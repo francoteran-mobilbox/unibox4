@@ -51,7 +51,7 @@ export interface DocumentoComunProcesoRequest {
 
 export interface DocumentoComunProcesoWrapperRequest {
   readonly documentoComunProceso: DocumentoComunProcesoRequest;
-  readonly permisosUsuarios: readonly unknown[];
+  readonly permisosUsuarios: readonly string[];
   readonly permisosRoles: readonly unknown[];
   readonly permisosGrupos: readonly unknown[];
 }
@@ -62,21 +62,16 @@ export interface CargoResponsableRequest {
 }
 
 export interface DatoRequeridoProcesoDatoRequest {
-  readonly idDatoReqProceso: number | null;
-  readonly processId: number | null;
   readonly idDatoReqMecanismo: number;
   readonly idDatoDisponibleProceso: string;
-  readonly valorTextoFijo: string;
-  readonly nombreSecuencia: string;
+  readonly valorTextoFijo?: string;
 }
 
 export interface DatoRequeridoProcesoMetadatoRequest {
-  readonly idDatoReqProceso: number | null;
   readonly idDocumento: number;
   readonly idMetadato: number;
   readonly idBloque: number;
   readonly codigoBloque: string;
-  readonly docComunId: number | null;
 }
 
 export interface DatoRequeridoProcesoRequest {
@@ -161,10 +156,6 @@ export interface MetadatoTransferidoRequest {
   readonly columnasTransferidasDestino?: readonly ColumnaTransferidaRequest[];
 }
 
-export interface PermisosUsuarioProcesoRequest {
-  readonly id_usuario: string;
-}
-
 export interface DocumentoComunActividadWrapperRequest {
   readonly nombreDocComunProceso: string;
   readonly documentoComunActividad: DocumentoComunActividadRequest;
@@ -229,7 +220,8 @@ export interface ActividadWrapperRequest {
   readonly elementosRequeridos: readonly unknown[];
   readonly idSubProceso: number | null;
   readonly registroExterno: unknown;
-  readonly timer: unknown;
+  readonly timer: TimerTransicionRequest | null;
+  readonly mensaje: MensajeActividadRequest | null;
 }
 
 export interface TransicionRequest {
@@ -239,7 +231,7 @@ export interface TransicionRequest {
   readonly activityIdDestination: number | null;
   readonly processId: number | null;
   readonly transitiontypeId: unknown;
-  readonly idAccionTransicion: number | null;
+  readonly idAccionTransicion: string | null;
   readonly tieneTimer: boolean;
   readonly levantaForm: boolean;
 }
@@ -257,22 +249,54 @@ export interface ReglaUsuarioRequest {
   readonly campoValor2: boolean;
 }
 
+export interface OperandoReglaNegocioRequest {
+  readonly valorOperando: string | null;
+  readonly esDoc: boolean;
+  readonly nombreDocComun: string | null;
+  readonly idBloque: number | null;
+  readonly codigoBloque: string | null;
+  readonly idMetadato: number | null;
+  readonly idTipoDato: string | null;
+}
+
 export interface ReglaNegocioRequest {
-  readonly idReglaNegocio: number | null;
   readonly idOperadorRegla: string | null;
-  readonly izqEsDoc: boolean;
-  readonly izqIdMetadato: number | null;
-  readonly izqIdBloque: number | null;
-  readonly izqCodigoBloque: string | null;
-  readonly izqIdTipoDato: string | null;
-  readonly izqIdOperando: number | null;
-  readonly derEsDoc: boolean;
-  readonly derIdMetadato: number | null;
-  readonly derIdBloque: number | null;
-  readonly derCodigoBloque: string | null;
-  readonly derIdTipoDato: string | null;
-  readonly derIdOperando: number | null;
-  readonly derValorOperando: string | null;
+  readonly operandoIzq: OperandoReglaNegocioRequest;
+  readonly operandoDer: OperandoReglaNegocioRequest;
+}
+
+export interface ColumnaGrillaMensajeRequest {
+  readonly idColumnaGrilla: number;
+  readonly datafield: string;
+  readonly tipoDato: string;
+  readonly titulo: string;
+}
+
+export interface DestinatarioMetadatoMensajeRequest {
+  readonly nombreDocComun: string | null;
+  readonly idMetadato: number;
+  readonly idBloque: number | null;
+  readonly codigoBloque?: string | null;
+  readonly esGrilla: boolean;
+  readonly columnasGrilla?: readonly ColumnaGrillaMensajeRequest[];
+}
+
+export interface MensajeActividadRequest {
+  readonly asunto: string;
+  readonly contenido: string;
+  readonly encabezado: boolean;
+  readonly cc: boolean;
+  readonly enviaACargo: boolean;
+  readonly enviaFormularioExterno: boolean;
+  readonly usuariosSistema: readonly string[];
+  readonly usuariosSistemaCc: readonly string[];
+  readonly usuariosExternos: readonly string[];
+  readonly usuariosExternosCc: readonly string[];
+  readonly rolesSistema: readonly number[];
+  readonly destinatariosMetadato: readonly DestinatarioMetadatoMensajeRequest[];
+  readonly destinatariosMetadatoCc: readonly DestinatarioMetadatoMensajeRequest[];
+  readonly documentosFormulario: readonly unknown[];
+  readonly documentosAdjuntos: readonly string[];
 }
 
 export interface TimerTransicionRequest {
@@ -303,7 +327,7 @@ export interface TransicionWrapperRequest {
 
 export interface CrearProcesoRequest {
   readonly proceso: ProcesoRequest;
-  readonly permisosUsuarios: readonly PermisosUsuarioProcesoRequest[];
+  readonly permisosUsuarios: readonly string[];
   readonly permisosRoles: readonly number[];
   readonly permisosGrupos: readonly number[];
   readonly rolesGenericosProceso: readonly unknown[];
