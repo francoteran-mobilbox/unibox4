@@ -372,6 +372,12 @@ function validarTimerNodo(
       resultadoNodo('error', nodo, `El timer «${nombreDeNodo(nodo)}» (${nodo.id}) está incompleto: ${detalle}.`),
     );
   }
+
+  if (config.cargo === undefined || config.cargo === null || config.cargo.trim() === '') {
+    resultados.push(
+      resultadoNodo('error', nodo, `El timer «${nombreDeNodo(nodo)}» (${nodo.id}) no tiene cargo seleccionado.`),
+    );
+  }
 }
 
 function validarDecisionNodo(
@@ -442,6 +448,10 @@ function validarMensajeNodo(
   }
 
   const faltantes: string[] = [];
+
+  if (config.cargo === null || config.cargo.trim() === '') {
+    faltantes.push('cargo');
+  }
 
   if (config.asunto.trim() === '') {
     faltantes.push('asunto');
@@ -587,6 +597,26 @@ export function validarDominioDiagrama(
           `La transición hacia «${nombreDeNodo(destino)}» tiene reglas de usuario incompletas.`,
         ),
       );
+    }
+
+    if (config.reglasUsuario.length > 0) {
+      // El destino puede ser tarea, decisión, mensaje o timer: todos exponen cargo.
+      const cargoDestino =
+        tareaConfigs[destino.id]?.cargo ??
+        mensajeConfigs[destino.id]?.cargo ??
+        timerConfigs[destino.id]?.cargo ??
+        decisionConfigs[destino.id]?.cargo ??
+        null;
+
+      if (cargoDestino === null || cargoDestino.trim() === '') {
+        resultados.push(
+          resultadoNodo(
+            'error',
+            origen,
+            `La transición hacia «${nombreDeNodo(destino)}» tiene reglas de usuario y el nodo destino no tiene cargo configurado.`,
+          ),
+        );
+      }
     }
 
     if (config.reglasNegocio.length > 0 && reglasNegocioIncompletas(config.reglasNegocio)) {

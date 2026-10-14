@@ -3,6 +3,9 @@ export type TimerModo = 'datoFijo' | 'metadatoFormulario';
 export type TimerDatoFijoTipo = 'tiempo' | 'fecha';
 
 export interface TimerConfig {
+  // cargo: solo lo usa el TIMER NODO (cargo asociado del nodo); el timer de
+  // transición comparte este modelo y no lo setea.
+  readonly cargo?: string | null;
   readonly modo: TimerModo;
   readonly datoFijoTipo: TimerDatoFijoTipo;
   readonly duracionValor: number | null;
@@ -18,6 +21,7 @@ export const TIMER_DURACION_UNIDAD_OPTIONS: readonly string[] = ['minutos', 'hor
 
 export function buildDefaultTimerConfig(): TimerConfig {
   return {
+    cargo: null,
     modo: 'datoFijo',
     datoFijoTipo: 'tiempo',
     duracionValor: null,

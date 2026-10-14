@@ -191,10 +191,10 @@ const COMBOS_TRANSICION: Record<string, Partial<TransicionFlags>> = {
   'decision->tarea': { accion: true },
   'decision->reglaNegocio': { accion: true },
   'decision->decision': { accion: true },
-  'decision->timer': { accion: true },
+  'decision->timer': { accion: true, reglasUsuario: true },
   'tarea->decision': { requiereTimer: true, reglasUsuario: true },
   'inicio->mensaje': { reglasUsuario: true },
-  'tarea->timer': { requiereTimer: true },
+  'tarea->timer': { requiereTimer: true, reglasUsuario: true },
 };
 
 export function flagsDeComboTransicion(

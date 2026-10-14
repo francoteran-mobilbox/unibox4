@@ -438,7 +438,15 @@ export class CrearProcesoRequestBuilder {
               undefined)
             : undefined;
 
-        const actividad = this.construirActividad(nodo, activitytypeId, idElemento, configTarea, decisionConfig);
+        const actividad = this.construirActividad(
+          nodo,
+          activitytypeId,
+          idElemento,
+          configTarea,
+          decisionConfig,
+          timerConfig,
+          mensajeConfig,
+        );
 
         const seleccionTarea = configTarea?.formularioRequeridoSeleccionado ?? null;
         const documentosComunesActividad =
@@ -567,9 +575,46 @@ export class CrearProcesoRequestBuilder {
 
   /**
    * Recupera el mensaje guardado del XML legacy cuando no hay configuración en
-   * la sesión (atributos del nodo <mensaje> escritos por el serializer).
+   * la sesión: atributos del nodo <mensaje> más los destinatarios persistidos
+   * en los contenedores usuariosMensaje/metadatosMensaje(Cc) por el serializer.
    */
   private parseMensajeDelXml(nodo: Element): MensajeActividadRequest {
+    const usuariosMensaje =
+      nodo.getElementsByTagName('usuariosMensaje')[0] ?? null;
+
+    const destinatariosDe = (copia: boolean, sistema: boolean): string[] =>
+      Array.from(
+        usuariosMensaje?.getElementsByTagName('usuario') ?? [],
+      )
+        .filter(
+          (usuario) =>
+            usuario.getAttribute('copia') === String(copia) &&
+            usuario.getAttribute('usuario_sistema') === String(sistema),
+        )
+        .map((usuario) => usuario.getAttribute('destinatario') ?? '')
+        .filter((destinatario) => destinatario.trim() !== '');
+
+    const metadatosDe = (etiqueta: string): DestinatarioMetadatoMensajeRequest[] =>
+      Array.from(
+        nodo.getElementsByTagName(etiqueta)[0]?.getElementsByTagName('metadato') ?? [],
+      )
+        .map((metadato) => {
+          const idMetadato = Number(metadato.getAttribute('idMetadato') ?? NaN);
+          const idBloqueAttr = metadato.getAttribute('idBloque');
+          const idBloque = idBloqueAttr !== null ? Number(idBloqueAttr) : null;
+          const codigoBloque = metadato.getAttribute('codigoBloque');
+          const esGrilla = metadato.getAttribute('esGrilla') === 'true';
+
+          return {
+            nombreDocComun: metadato.getAttribute('nombreDocComun') ?? '',
+            idMetadato,
+            idBloque: idBloque !== null && Number.isFinite(idBloque) ? idBloque : null,
+            ...(codigoBloque !== null && codigoBloque !== '' ? { codigoBloque } : {}),
+            esGrilla,
+          };
+        })
+        .filter((item) => Number.isFinite(item.idMetadato) && item.idMetadato > 0);
+
     return {
       asunto: nodo.getAttribute('subject') ?? '',
       contenido: nodo.getAttribute('content') ?? '',
@@ -577,13 +622,13 @@ export class CrearProcesoRequestBuilder {
       cc: nodo.getAttribute('conCopia') === 'true',
       enviaACargo: nodo.getAttribute('enviarUsuariosDelCargo') === 'true',
       enviaFormularioExterno: nodo.getAttribute('enviaFormularioExterno') === 'true',
-      usuariosSistema: [],
-      usuariosSistemaCc: [],
-      usuariosExternos: [],
-      usuariosExternosCc: [],
+      usuariosSistema: destinatariosDe(false, true),
+      usuariosSistemaCc: destinatariosDe(true, true),
+      usuariosExternos: destinatariosDe(false, false),
+      usuariosExternosCc: destinatariosDe(true, false),
       rolesSistema: [],
-      destinatariosMetadato: [],
-      destinatariosMetadatoCc: [],
+      destinatariosMetadato: metadatosDe('metadatosMensaje'),
+      destinatariosMetadatoCc: metadatosDe('metadatosMensajeCc'),
       documentosFormulario: [],
       documentosAdjuntos: [],
     };
@@ -610,6 +655,8 @@ export class CrearProcesoRequestBuilder {
     idElemento: string,
     configTarea: TareaConfig | undefined,
     decisionConfig: DecisionConfig | null,
+    configTimer?: TimerConfig,
+    configMensaje?: MensajeConfig,
   ): ActividadRequest {
     const config =
       configTarea ??
@@ -617,7 +664,7 @@ export class CrearProcesoRequestBuilder {
 
     const overrides =
       config === undefined
-        ? {}
+        ? this.overridesCargoMensajeTimer(nodo, activitytypeId, configTimer, configMensaje)
         : {
             activityTime: config.duracionValor ?? 0,
             timeunitId: config.duracionUnidad ?? 'minutos',
@@ -691,6 +738,40 @@ export class CrearProcesoRequestBuilder {
       esConfiguracion: false,
       ...overrides,
     };
+  }
+
+  // Cargo asociado de los nodos mensaje/timer: sigue viajando por
+  // ActividadRequest.idRol (hoy quedaba en -1). Sin config de sesión, se
+  // recupera del atributo swimlane persistido en el XML.
+  private overridesCargoMensajeTimer(
+    nodo: Element,
+    activitytypeId: ProcesoActivityTypeId,
+    configTimer?: TimerConfig,
+    configMensaje?: MensajeConfig,
+  ): Record<string, unknown> {
+    const cargo =
+      activitytypeId === 'timer'
+        ? configTimer?.cargo
+        : activitytypeId === 'mensaje'
+          ? configMensaje?.cargo
+          : null;
+    const cargoXml = nodo.getAttribute('swimlane');
+    const cargoValido =
+      cargo !== undefined && cargo !== null && String(cargo).trim() !== '';
+
+    return {
+      idRol: cargoValido ? Number(cargo) : this.idRolDesdeSwimlane(cargoXml),
+    };
+  }
+
+  private idRolDesdeSwimlane(valor: string | null): number {
+    if (valor === null || valor.trim() === '') {
+      return -1;
+    }
+
+    const numero = Number(valor);
+
+    return Number.isFinite(numero) && numero > 0 ? numero : -1;
   }
 
   private tareaConfigDesdeDecision(config: DecisionConfig): TareaConfig {
@@ -1016,7 +1097,7 @@ export class CrearProcesoRequestBuilder {
             idActividadOrigen: idOrigen,
             idActividadDestino: idDestino,
             reglasUsuario: (config?.reglasUsuario ?? []).map((regla) =>
-              this.buildReglaUsuarioPlana(regla, extras),
+              this.buildReglaUsuarioPlana(regla, extras, formulariosProceso),
             ),
             reglasNegocio: (config?.reglasNegocio ?? []).map((regla) =>
               this.buildReglaNegocioPlana(regla, extras, formulariosProceso),
@@ -1040,6 +1121,7 @@ export class CrearProcesoRequestBuilder {
   private buildReglaUsuarioPlana(
     regla: TransicionReglaUsuario,
     extras?: CrearProcesoRequestExtras,
+    formulariosProceso?: readonly FormularioProcesoConfig[],
   ): ReglaUsuarioRequest {
     const idDocumento = regla.idDocumento ?? null;
     const idMetIzqClave = regla.idMetadato ?? null;
@@ -1057,7 +1139,9 @@ export class CrearProcesoRequestBuilder {
 
     return {
       idReglaUsuario: regla.idReglaUsuario ?? null,
-      idDocIzq: idDocumento,
+      // El backend determina el formulario por nombreDocComun: el id viaja vacío.
+      idDocIzq: null,
+      nombreDocComun: this.nombreFormularioProcesoDe(idDocumento, formulariosProceso),
       idBloqIzq: izquierda?.idBloque ?? -1,
       codigoBloqIzq: izquierda?.codigoBloque ?? null,
       idMetIzq: izquierda?.idMetadato ?? (idMetIzqClave !== null ? this.parseIdMetadatoDeClave(idMetIzqClave) : null),
@@ -1065,8 +1149,24 @@ export class CrearProcesoRequestBuilder {
       idBloqDer: derecho?.idBloque ?? -1,
       codigoBloqDer: derecho?.codigoBloque ?? null,
       idMetDer,
-      campoValor2: regla.interpretacion === 'id',
+      // campoValor2 (id) solo tiene sentido si el metadato de origen es CBX;
+      // en cualquier otro caso el submit fuerza false (interpretación texto).
+      campoValor2: izquierda?.tipo === 'CBX' ? regla.interpretacion === 'id' : false,
     };
+  }
+
+  private nombreFormularioProcesoDe(
+    idFormulario: number | null,
+    formulariosProceso?: readonly FormularioProcesoConfig[],
+  ): string | null {
+    if (idFormulario === null) {
+      return null;
+    }
+
+    const formulario = formulariosProceso?.find((f) => f.idFormulario === idFormulario);
+    const nombre = formulario?.nombre?.trim() || formulario?.nombreDocumento?.trim() || '';
+
+    return nombre !== '' ? nombre : null;
   }
 
   private buildReglaNegocioPlana(

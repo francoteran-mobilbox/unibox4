@@ -19,6 +19,9 @@ import {
 import { BpmnAdapterService } from './services/bpmn-adapter.service';
 import { DiagramaService } from './services/diagrama.service';
 import { buildDefaultTareaConfig } from './models/tarea-config.model';
+import { buildDefaultDecisionConfig } from './models/decision-config.model';
+import { buildDefaultMensajeConfig } from './models/mensaje-config.model';
+import { buildDefaultTransicionConfig } from './models/transicion-config.model';
 
 const DIAGRAMA_SERVICE_SPY = jasmine.createSpyObj<DiagramaService>('DiagramaService', [
   'obtenerProcesosEjecucion',
@@ -519,12 +522,22 @@ describe('DiagramaComponent', () => {
       expect(component.diagramaModalPantallaCompleta()).toBeFalse();
     });
 
-    it('alternarPantallaCompleta sin modal en el DOM deja la señal en false', async () => {
+    it('alternarPantallaCompleta sin fullscreen disponible deja la señal en false', async () => {
       const fixture = TestBed.createComponent(DiagramaComponent);
       fixture.detectChanges();
       const component = fixture.componentInstance as any;
 
-      await component.alternarPantallaCompleta();
+      // Se neutraliza la Fullscreen API para forzar el early-return del guard.
+      Object.defineProperty(document, 'fullscreenEnabled', {
+        configurable: true,
+        value: false,
+      });
+
+      try {
+        await component.alternarPantallaCompleta();
+      } finally {
+        delete (document as any).fullscreenEnabled;
+      }
 
       expect(component.diagramaModalPantallaCompleta()).toBeFalse();
     });
@@ -945,6 +958,24 @@ describe('DiagramaComponent', () => {
       expect(component.tooltipEliminarFormulario(FORMULARIO_EN_USO)).toContain('En uso en:');
       expect(component.tooltipEliminarFormulario(FORMULARIO_LIBRE)).toBe('Eliminar');
     });
+
+    it('traspasoFormulariosOrigen excluye solo la fila seleccionada aunque compartan documento', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.formulariosProceso.set([
+        { id: 'fp-1', nombre: 'Solicitud', idFormulario: 795, visibilidad: 'privado' },
+        { id: 'fp-2', nombre: 'Solicitud nueva', idFormulario: 795, visibilidad: 'privado' },
+        { id: 'fp-3', nombre: 'Flag', idFormulario: 660, visibilidad: 'privado' },
+        { id: 'fp-4', nombre: 'Sin documento', idFormulario: 0, visibilidad: 'publico' },
+      ]);
+      component.formularioSeleccionadoId.set('fp-1');
+
+      const opciones = component.traspasoFormulariosOrigen();
+
+      expect(opciones.map((f: any) => f.id)).toEqual(['fp-2', 'fp-3']);
+    });
   });
 
   describe('opciones de compartir', () => {
@@ -989,6 +1020,264 @@ describe('DiagramaComponent', () => {
         { label: 'Ana Torres', value: 'atorres' },
         { label: 'Bruno Diaz', value: 'bdiaz' },
       ]);
+    });
+  });
+
+  describe('usuarios por cargo', () => {
+    const USUARIO_CARGO_46 = {
+      id_rol: 46,
+      nombre_completo_usuario: 'Carla Ruiz',
+      id_usuario: 'cruiz',
+      roles_secundarios: [],
+    };
+
+    it('al restaurar una tarea el espejo del cargo se sincroniza y conviven guardados y opciones', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.usuariosLiviano.set([USUARIO_CARGO_46]);
+      component.diagramaElementoSeleccionado.set({ id: 't1', kind: 'tarea' });
+      component.tareaConfigs.set({
+        t1: {
+          ...buildDefaultTareaConfig('Tarea Uno'),
+          cargo: '46',
+          usuarios: ['uX'],
+        },
+      });
+
+      component.resetDiagramaElementoForm(
+        component.diagramaElementoSeleccionado(),
+        component.tareaConfigs()['t1'],
+      );
+
+      expect(component.tareaUsuariosDisponibles()).toEqual([
+        { label: 'Carla Ruiz', value: 'cruiz' },
+        { label: 'uX', value: 'uX' },
+      ]);
+    });
+
+    it('al restaurar una decisión el espejo del cargo se sincroniza y conviven guardados y opciones', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.usuariosLiviano.set([USUARIO_CARGO_46]);
+      component.diagramaElementoSeleccionado.set({ id: 'd1', kind: 'decision' });
+      component.decisionConfigs.set({
+        d1: {
+          ...buildDefaultDecisionConfig('Decision Uno'),
+          cargo: '46',
+          usuarios: ['uD'],
+        },
+      });
+
+      component.resetDecisionForm(component.decisionConfigs()['d1']);
+
+      expect(component.decisionUsuariosDisponibles()).toEqual([
+        { label: 'Carla Ruiz', value: 'cruiz' },
+        { label: 'uD', value: 'uD' },
+      ]);
+    });
+  });
+
+  describe('reglas de usuario (cargo del nodo destino)', () => {
+    const REQUISITO_ROL_46 = {
+      id_rol: 46,
+      nombre_rol: 'Analista',
+      metadatosRequeridos: [
+        { id_metadato: 873, nombre_metadato: 'Id usuario', nombre_bloque: '(Bloque sistema)' },
+        { id_metadato: 900, nombre_metadato: 'Otro', nombre_bloque: 'Otro bloque' },
+      ],
+    };
+    const REQUISITO_ROL_52 = {
+      id_rol: 52,
+      nombre_rol: 'Supervisor',
+      metadatosRequeridos: [
+        { id_metadato: 990, nombre_metadato: 'Id usuario', nombre_bloque: '(Bloque sistema)' },
+      ],
+    };
+
+    it('el estado del destino es válido cuando el rol destino expone Id usuario', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.metadatosRequeridosRol.set([REQUISITO_ROL_46, REQUISITO_ROL_52]);
+      component.transicionDestinoId.set('T_1');
+      component.tareaConfigs.set({
+        T_1: { ...buildDefaultTareaConfig('Tarea destino'), cargo: '46' },
+      });
+
+      expect(component.transicionDestinoReglasEstado()).toEqual(
+        jasmine.objectContaining({
+          cargo: '46',
+          metadatoUsuario: '873',
+          valido: true,
+        }),
+      );
+      expect(component.transicionCargosDestinoOptions()).toEqual([
+        { label: 'Analista', value: '46' },
+      ]);
+    });
+
+    it('trata como sin cargo cuando el rol destino no expone Id usuario', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.metadatosRequeridosRol.set([
+        { id_rol: 46, nombre_rol: 'Analista', metadatosRequeridos: [] },
+      ]);
+      component.transicionDestinoId.set('T_1');
+      component.tareaConfigs.set({
+        T_1: { ...buildDefaultTareaConfig('Tarea destino'), cargo: '46' },
+      });
+
+      expect(component.transicionDestinoReglasEstado().valido).toBeFalse();
+      expect(component.transicionCargosDestinoOptions()).toEqual([]);
+    });
+
+    it('resuelve el cargo del destino por fall-through entre tarea, mensaje y timer', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.mensajeConfigs.set({
+        M_1: { ...buildDefaultMensajeConfig(), cargo: '52' },
+      });
+
+      expect(component['cargoDeNodo']('M_1')).toBe('52');
+      expect(component['cargoDeNodo']('inexistente')).toBeNull();
+    });
+
+    it('reconfigurarReglasDeDestino reescribe cargo y metadato según el nodo destino', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component.metadatosRequeridosRol.set([REQUISITO_ROL_46, REQUISITO_ROL_52]);
+      component.mensajeConfigs.set({
+        M_1: { ...buildDefaultMensajeConfig(), cargo: '52' },
+      });
+      component.transicionConfigs.set({
+        f1: {
+          ...buildDefaultTransicionConfig(),
+          reglasUsuario: [
+            {
+              idDocumento: 795,
+              idMetadato: 'BM2163-1299',
+              interpretacion: 'texto' as const,
+              idCargo: 46,
+              idMetadatoValor: '873',
+              idReglaUsuario: null,
+            },
+          ],
+        },
+      });
+
+      const resultado = component['reconfigurarReglasDeDestino'](
+        component.transicionConfigs(),
+        [{ id: 'f1', sourceId: 'T_1', targetId: 'M_1', name: '' }],
+      );
+
+      expect(resultado['f1'].reglasUsuario[0]).toEqual(
+        jasmine.objectContaining({
+          idCargo: 52,
+          idMetadatoValor: '990',
+        }),
+      );
+    });
+  });
+
+  describe('metadatos de destinatarios del mensaje', () => {
+    it('el select de metadato solo muestra tipos DGD, COR y SIS', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component['mensajeMetadatosCache'].set(795, [
+        { label: '(Bloque 1) | DGD uno', value: 'BM2177-100', idMetadato: 100, tipo: 'DGD' },
+        { label: '(Bloque 1) | COR uno', value: 'BM2177-101', idMetadato: 101, tipo: 'COR' },
+        { label: '(Bloque 1) | SIS uno', value: 'BM2177-102', idMetadato: 102, tipo: 'SIS' },
+        { label: '(Bloque 1) | ALF uno', value: 'BM2177-103', idMetadato: 103, tipo: 'ALF' },
+        { label: '(Bloque 1) | NUM uno', value: 'BM2177-104', idMetadato: 104, tipo: 'NUM' },
+      ]);
+      component.diagramaElementoSeleccionado.set({ id: 'M_1', kind: 'mensaje' });
+      component.agregarMensajeReferenciaPar('para');
+      const par = component.mensajeReferenciasDe('para').at(0);
+      par.controls.idDocumento.setValue('795', { emitEvent: false });
+
+      expect(component.mensajeMetadatosDePar('para', 0).map((o: any) => o.tipo)).toEqual([
+        'DGD',
+        'COR',
+        'SIS',
+      ]);
+
+      par.controls.idDocumento.setValue('', { emitEvent: false });
+      expect(component.mensajeMetadatosDePar('para', 0)).toEqual([]);
+    });
+
+    it('el token de referencia usa nombreMetadato + idBloque (formato legacy)', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component['mensajeMetadatosCache'].set(795, [
+        {
+          label: 'Solicitud N°',
+          value: 'BM2177-1219',
+          nombreMetadato: 'Solicitud N°',
+          idMetadato: 1219,
+          tipo: 'ALF',
+          codigoBloque: 'BM2177',
+          idBloque: 5641,
+        },
+      ]);
+      component.formulariosProceso.set([
+        {
+          id: 'fp-1',
+          nombre: 'Solicitud de Viático',
+          idFormulario: 795,
+          visibilidad: 'publico',
+        },
+      ]);
+      component.mensajeTokenDocumentoSeleccionado.set('795');
+      component.mensajeTokenMetadatoSeleccionado.set('BM2177-1219');
+
+      expect(component.construirTokenReferenciaPar()).toBe(
+        '/insertar//var/Solicitud N°%Solicitud de Viático%5641%1219/insertar/',
+      );
+    });
+
+    it('el token de referencia no se construye para metadatos DGD', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      component['mensajeMetadatosCache'].set(795, [
+        {
+          label: 'DGD uno',
+          value: 'BM2177-100',
+          nombreMetadato: 'DGD uno',
+          idMetadato: 100,
+          tipo: 'DGD',
+          codigoBloque: 'BM2177',
+          idBloque: 5641,
+        },
+      ]);
+      component.formulariosProceso.set([
+        {
+          id: 'fp-1',
+          nombre: 'Solicitud de Viático',
+          idFormulario: 795,
+          visibilidad: 'publico',
+        },
+      ]);
+      component.mensajeTokenDocumentoSeleccionado.set('795');
+      component.mensajeTokenMetadatoSeleccionado.set('BM2177-100');
+
+      expect(component.construirTokenReferenciaPar()).toBe('');
     });
   });
 });

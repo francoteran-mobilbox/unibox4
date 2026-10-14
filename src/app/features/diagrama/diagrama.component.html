@@ -919,6 +919,18 @@
               <nz-alert nzType="warning" [nzMessage]="mensajeValidacionError()" nzShowIcon />
             }
 
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Cargo *</span>
+              <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear nzShowSearch>
+                @for (option of cargosOptions(); track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                }
+              </nz-select>
+              @if (mensajeElementoForm.controls.cargo.touched && mensajeElementoForm.controls.cargo.invalid) {
+                <span class="diagrama__field-error">El cargo es obligatorio</span>
+              }
+            </div>
+
             <div class="diagrama__mensaje-row">
               <span class="diagrama__field-label diagrama__mensaje-row-label">Para:</span>
               <span class="diagrama__mensaje-summary">{{ mensajeResumenDestinatarios('para') }}</span>
@@ -1047,6 +1059,18 @@
             />
           </div>
           <form class="diagrama__tarea-form" [formGroup]="timerElementoForm">
+            <div class="diagrama__field diagrama__field--full">
+              <span class="diagrama__field-label">Cargo *</span>
+              <nz-select formControlName="cargo" nzPlaceHolder="Selecciona cargo" nzAllowClear nzShowSearch>
+                @for (option of cargosOptions(); track option.value) {
+                  <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                }
+              </nz-select>
+              @if (timerElementoForm.controls.cargo.touched && timerElementoForm.controls.cargo.invalid) {
+                <span class="diagrama__field-error">El cargo es obligatorio</span>
+              }
+            </div>
+
             <div class="diagrama__field diagrama__field--full">
               <span class="diagrama__field-label">Modo de configuración *</span>
               <nz-radio-group formControlName="modo">
@@ -1450,12 +1474,32 @@
             @if (transicionFlags().reglasUsuario) {
               <div class="diagrama__field diagrama__field--full">
                 <span class="diagrama__field-label">Reglas de usuario</span>
+                @if (!transicionDestinoReglasEstado().valido) {
+                  <p class="diagrama__regla-usuario-aviso">
+                    El nodo destino no tiene cargo configurado (o el cargo no expone
+                    "Id usuario"). Configura el cargo del nodo destino para usar reglas
+                    de usuario.
+                  </p>
+                }
                 @for (
                   regla of transicionElementoForm.controls.reglasUsuario.controls;
                   track $index;
                   let i = $index
                 ) {
                   <div class="diagrama__transicion-regla" [formGroup]="regla">
+                    <div class="diagrama__transicion-regla-col-borrar">
+                      <button
+                        nz-button
+                        nzType="text"
+                        nzDanger
+                        type="button"
+                        nz-tooltip
+                        nzTooltipTitle="Quitar regla"
+                        (click)="quitarTransicionReglaUsuario(i)"
+                      >
+                        <nz-icon nzType="delete" nzTheme="outline" />
+                      </button>
+                    </div>
                     <div class="diagrama__transicion-regla-col">
                       <nz-select
                         formControlName="idDocumento"
@@ -1495,9 +1539,8 @@
                       <nz-select
                         formControlName="idCargo"
                         nzPlaceHolder="Cargo"
-                        nzAllowClear
                       >
-                        @for (cargo of transicionCargosReqRolOptions(); track cargo.value) {
+                        @for (cargo of transicionCargosDestinoOptions(); track cargo.value) {
                           <nz-option [nzValue]="cargo.value" [nzLabel]="cargo.label" />
                         }
                       </nz-select>
@@ -1515,17 +1558,6 @@
                         }
                       </nz-select>
                     </div>
-                    <button
-                      nz-button
-                      nzType="text"
-                      nzDanger
-                      type="button"
-                      nz-tooltip
-                      nzTooltipTitle="Quitar regla"
-                      (click)="quitarTransicionReglaUsuario(i)"
-                    >
-                      <nz-icon nzType="delete" nzTheme="outline" />
-                    </button>
                   </div>
                 } @empty {
                   <p class="diagrama__mensaje-empty-hint">Sin reglas de usuario configuradas.</p>
@@ -1535,6 +1567,7 @@
                   nzBlock
                   nzType="dashed"
                   type="button"
+                  [disabled]="!transicionDestinoReglasEstado().valido"
                   (click)="agregarTransicionReglaUsuario()"
                 >
                   + Agregar regla de usuario
@@ -1551,6 +1584,19 @@
                   let i = $index
                 ) {
                   <div class="diagrama__transicion-regla-negocio" [formGroup]="regla">
+                    <div class="diagrama__transicion-regla-col-borrar">
+                      <button
+                        nz-button
+                        nzType="text"
+                        nzDanger
+                        type="button"
+                        nz-tooltip
+                        nzTooltipTitle="Quitar regla"
+                        (click)="quitarTransicionReglaNegocio(i)"
+                      >
+                        <nz-icon nzType="delete" nzTheme="outline" />
+                      </button>
+                    </div>
                     <div class="diagrama__transicion-regla-col">
                       <nz-select
                         formControlName="idDocumento"
@@ -1619,17 +1665,6 @@
                         </nz-select>
                       }
                     </div>
-                    <button
-                      nz-button
-                      nzType="text"
-                      nzDanger
-                      type="button"
-                      nz-tooltip
-                      nzTooltipTitle="Quitar regla"
-                      (click)="quitarTransicionReglaNegocio(i)"
-                    >
-                      <nz-icon nzType="delete" nzTheme="outline" />
-                    </button>
                   </div>
                 } @empty {
                   <p class="diagrama__mensaje-empty-hint">Sin reglas de negocio configuradas.</p>
@@ -2358,10 +2393,11 @@
             >
               <thead>
                 <tr>
-                  <th nzWidth="27%">Nombre</th>
-                  <th nzWidth="29%">Documento</th>
-                  <th nzWidth="16%">Visibilidad</th>
-                  <th nzWidth="12%">Compartido</th>
+                  <th nzWidth="24%">Nombre</th>
+                  <th nzWidth="24%">Documento</th>
+                  <th nzWidth="14%">Visibilidad</th>
+                  <th nzWidth="11%">Compartido</th>
+                  <th nzWidth="11%">Firmable</th>
                   <th nzWidth="16%" class="diagrama__acc-col">Acciones</th>
                 </tr>
               </thead>
@@ -2405,6 +2441,21 @@
                         }
                       } @else {
                         <span class="diagrama__celda-na">—</span>
+                      }
+                    </td>
+                    <td>
+                      @if (fila.idFormulario === 0) {
+                        <span class="diagrama__celda-na">—</span>
+                      } @else {
+                        @if (formularioEsFirmable(fila)) {
+                          <nz-tag nzColor="blue" nz-tooltip nzTooltipTitle="El documento del formulario es firmable">
+                            Si
+                          </nz-tag>
+                        } @else {
+                          <nz-tag nzColor="default" nz-tooltip nzTooltipTitle="El documento del formulario no es firmable">
+                            No
+                          </nz-tag>
+                        }
                       }
                     </td>
                     <td class="diagrama__acc-col">

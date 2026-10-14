@@ -17,6 +17,7 @@ export interface MensajeFormularioItem {
 export type MensajeCompletarFormulario = 'sin' | 'proceso' | 'externo';
 
 export interface MensajeConfig {
+  readonly cargo: string | null;
   readonly destinatarios: MensajeDestinatarios;
   readonly destinatariosCc: MensajeDestinatarios;
   readonly enviarACargo: boolean;
@@ -61,6 +62,7 @@ export function mensajeDestinoConfigurado(destino: MensajeDestinatarios): boolea
 
 export function buildDefaultMensajeConfig(): MensajeConfig {
   return {
+    cargo: null,
     destinatarios: buildDefaultMensajeDestinatarios(),
     destinatariosCc: buildDefaultMensajeDestinatarios(),
     enviarACargo: false,

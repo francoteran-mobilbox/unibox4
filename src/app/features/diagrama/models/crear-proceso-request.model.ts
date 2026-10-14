@@ -239,6 +239,7 @@ export interface TransicionRequest {
 export interface ReglaUsuarioRequest {
   readonly idReglaUsuario: number | null;
   readonly idDocIzq: number | null;
+  readonly nombreDocComun: string | null;
   readonly idBloqIzq: number | null;
   readonly codigoBloqIzq: string | null;
   readonly idMetIzq: number | null;

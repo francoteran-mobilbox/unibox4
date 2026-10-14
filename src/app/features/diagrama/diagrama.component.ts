@@ -6,8 +6,10 @@ import {
   HostListener,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import {
   FormBuilder,
@@ -37,7 +39,7 @@ import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { Subject, Subscription, Observable, forkJoin, of, fromEvent } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, map } from 'rxjs/operators';
-import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NzRadioModule } from 'ng-zorro-antd/radio';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzTimePickerModule } from 'ng-zorro-antd/time-picker';
@@ -170,6 +172,7 @@ interface MetadatoOpcion {
   readonly label: string;
   readonly value: string;
   readonly idMetadato: number;
+  readonly nombreMetadato?: string;
   readonly tipo?: string;
   readonly codigoBloque?: string;
   readonly nombreBloque?: string | null;
@@ -193,6 +196,10 @@ function labelMetadatoConBloque(
 
   return bloque !== '' ? `${bloque} | ${nombreMetadato}` : nombreMetadato;
 }
+
+// Tipos de metadato habilitados como destinatarios (Documento/Metadato) del
+// mensaje. DGD se muestra pero sigue bloqueando el guardado (futura iteración).
+const TIPOS_METADATO_DESTINATARIO: readonly string[] = ['DGD', 'COR', 'SIS'];
 
 function idCompartidoDesdeBackend(valor: unknown, clave: string): string {
   if (typeof valor === 'number') {
@@ -530,9 +537,12 @@ export class DiagramaComponent {
     checkpoint: this.formBuilder.nonNullable.control(false),
   });
 
-  private readonly tareaCargoSeleccionado = toSignal(
-    this.diagramaElementoForm.controls.cargo.valueChanges,
-    { initialValue: this.diagramaElementoForm.controls.cargo.value },
+  // Espejo manual del control cargo: se setea también en la suscripción de
+  // purga y en resetDiagramaElementoForm, porque la restauración usa
+  // patchValue con emitEvent:false (no emite valueChanges) y un toSignal de
+  // valueChanges quedaría desincronizado al cargar un proceso.
+  private readonly tareaCargoSeleccionado = signal<string | null>(
+    this.diagramaElementoForm.controls.cargo.value,
   );
 
   private usuariosPorRol(cargo: string | null): SelectOption[] {
@@ -596,6 +606,7 @@ export class DiagramaComponent {
   >();
 
   protected readonly mensajeElementoForm = this.formBuilder.group({
+    cargo: this.formBuilder.control<string | null>(null, [Validators.required]),
     enviarACargo: this.formBuilder.nonNullable.control(false),
     encabezadoInfoProceso: this.formBuilder.nonNullable.control(false),
     asunto: this.formBuilder.nonNullable.control(''),
@@ -610,6 +621,7 @@ export class DiagramaComponent {
   protected readonly timerDuracionUnidadOptions = TIMER_DURACION_UNIDAD_OPTIONS;
 
   protected readonly timerElementoForm = this.formBuilder.group({
+    cargo: this.formBuilder.control<string | null>(null, [Validators.required]),
     modo: this.formBuilder.nonNullable.control<TimerModo>('datoFijo'),
     datoFijoTipo: this.formBuilder.nonNullable.control<TimerDatoFijoTipo>('tiempo'),
     duracionValor: this.formBuilder.control<number | null>(null),
@@ -663,6 +675,7 @@ export class DiagramaComponent {
 
     this.timerElementoForm.patchValue(
       {
+        cargo: base.cargo,
         modo: base.modo,
         datoFijoTipo: base.datoFijoTipo,
         duracionValor: base.duracionValor,
@@ -717,15 +730,32 @@ export class DiagramaComponent {
     notificarViaEmail: this.formBuilder.nonNullable.control(false),
   });
 
-  private readonly decisionCargoSeleccionado = toSignal(
-    this.decisionElementoForm.controls.cargo.valueChanges,
-    { initialValue: this.decisionElementoForm.controls.cargo.value },
+  // Espejo manual del cargo por la misma razón que tareaCargoSeleccionado.
+  private readonly decisionCargoSeleccionado = signal<string | null>(
+    this.decisionElementoForm.controls.cargo.value,
   );
 
   protected readonly decisionUsuariosDisponibles = computed(() => {
     const cargo = this.decisionCargoSeleccionado();
+    const opciones = new Map<string, SelectOption>();
 
-    return this.usuariosPorRol(cargo);
+    for (const usuario of this.usuariosPorRol(cargo)) {
+      opciones.set(usuario.value, usuario);
+    }
+
+    // Los usuarios configurados en el nodo conviven con las opciones del
+    // cargo: nz-select multiple oculta los valores sin opción correspondiente.
+    const elementoId = this.diagramaElementoSeleccionado()?.id;
+
+    if (elementoId !== undefined) {
+      for (const usuario of this.decisionConfigs()[elementoId]?.usuarios ?? []) {
+        if (usuario.trim() !== '' && !opciones.has(usuario)) {
+          opciones.set(usuario, { label: usuario, value: usuario });
+        }
+      }
+    }
+
+    return [...opciones.values()];
   });
 
   private updateDecisionValidators(): void {
@@ -768,6 +798,9 @@ export class DiagramaComponent {
       },
       { emitEvent: false },
     );
+    // patchValue no emite valueChanges: sincronizar el espejo a mano para que
+    // decisionUsuariosDisponibles refleje el cargo restaurado.
+    this.decisionCargoSeleccionado.set(base.cargo);
     this.updateDecisionValidators();
     this.decisionElementoForm.markAsPristine();
     this.decisionElementoForm.markAsUntouched();
@@ -799,6 +832,7 @@ export class DiagramaComponent {
   protected readonly metadatosRequeridosRol = signal<readonly MetadatoRequeridoRol[]>([]);
   protected readonly usuariosLiviano = signal<readonly UsuarioLiviano[]>([]);
   protected readonly transicionOrigenId = signal<string | null>(null);
+  protected readonly transicionDestinoId = signal<string | null>(null);
   protected readonly validacionDiagrama = signal<readonly ResultadoValidacionDiagrama[]>([]);
   protected readonly tieneErroresValidacionDiagrama = computed(() =>
     this.validacionDiagrama().some((resultado) => resultado.nivel === 'error'),
@@ -872,14 +906,16 @@ export class DiagramaComponent {
 
   protected agregarTransicionReglaUsuario(): void {
     this.transicionRowUid.current += 1;
-    const origenId = this.transicionOrigenId();
-    const cargoPorDefecto = origenId === null ? null : this.tareaConfigs()[origenId]?.cargo ?? '';
+    // El cargo de la regla es el del nodo destino y el metadato arranca con
+    // '(Bloque sistema) | Id usuario' de ese rol.
+    const estado = this.transicionDestinoReglasEstado();
+    const cargoPorDefecto = estado.valido ? estado.cargo! : null;
     const group = this.formBuilder.group({
       idDocumento: this.formBuilder.nonNullable.control<string>(''),
       idMetadato: this.formBuilder.nonNullable.control<string>(''),
-      interpretacion: this.formBuilder.nonNullable.control<TransicionInterpretacion>('id'),
+      interpretacion: this.formBuilder.nonNullable.control<TransicionInterpretacion>('texto'),
       idCargo: this.formBuilder.nonNullable.control<string>(cargoPorDefecto ?? ''),
-      idMetadatoValor: this.formBuilder.nonNullable.control<string>(''),
+      idMetadatoValor: this.formBuilder.nonNullable.control<string>(estado.metadatoUsuario ?? ''),
       idReglaUsuario: this.formBuilder.nonNullable.control<string>(''),
     });
 
@@ -888,8 +924,8 @@ export class DiagramaComponent {
         group.controls.idMetadato.setValue('');
         this.asegurarMetadatosDocumento(idDocumento);
       }),
-      group.controls.idCargo.valueChanges.subscribe(() => {
-        group.controls.idMetadatoValor.setValue('');
+      group.controls.idCargo.valueChanges.subscribe((cargo) => {
+        group.controls.idMetadatoValor.setValue(this.metadatoUsuarioPorCargo(cargo) ?? '');
       }),
     ];
 
@@ -986,12 +1022,22 @@ export class DiagramaComponent {
         idDocumento: item.idDocumento !== null ? String(item.idDocumento) : '',
         idMetadato: item.idMetadato ?? '',
         interpretacion: item.interpretacion,
-        idCargo: item.idCargo !== null && item.idCargo !== undefined ? String(item.idCargo) : '',
+        // idCargo lo aporta el default del nodo destino; el cargo guardado en
+        // la regla queda informativo.
         idMetadatoValor: item.idMetadatoValor ?? '',
         idReglaUsuario: item.idReglaUsuario !== null && item.idReglaUsuario !== undefined ? String(item.idReglaUsuario) : '',
       },
       { emitEvent: false },
     );
+
+    // Filas cargadas sin metadato: autoselección '(Bloque sistema) | Id usuario'.
+    if (group !== undefined && group.controls.idMetadatoValor.value === '') {
+      const metadato = this.metadatoUsuarioPorCargo(group.controls.idCargo.value);
+
+      if (metadato !== null) {
+        group.controls.idMetadatoValor.setValue(metadato, { emitEvent: false });
+      }
+    }
 
     if (item.idDocumento !== null) {
       this.asegurarMetadatosDocumento(String(item.idDocumento));
@@ -1103,6 +1149,12 @@ export class DiagramaComponent {
       }
     }
 
+    if (this.transicionElementoForm.controls.reglasUsuario.controls.length > 0) {
+      if (!this.transicionDestinoReglasEstado().valido) {
+        return 'Las reglas de usuario requieren que el nodo destino tenga un cargo válido.';
+      }
+    }
+
     for (const group of this.transicionElementoForm.controls.reglasNegocio.controls) {
       const v = group.getRawValue();
       const ladoIzquierdo = v.idDocumento !== '' || v.idMetadato !== '';
@@ -1158,13 +1210,14 @@ export class DiagramaComponent {
         }
       : buildDefaultTimerConfig();
 
+    // interpretación ('id') solo si el metadato izq es CBX; si no, campo_valor2 viaja false.
     const reglasUsuario: TransicionReglaUsuario[] = this.transicionElementoForm.controls.reglasUsuario.controls
       .map((group) => group.getRawValue())
       .filter((v) => v.idDocumento !== '' && v.idMetadato !== '')
       .map((v) => ({
         idDocumento: Number(v.idDocumento),
         idMetadato: v.idMetadato,
-        interpretacion: v.interpretacion,
+        interpretacion: this.interpretacionPermitidaDe(v.idDocumento, v.idMetadato, v.interpretacion),
         idCargo: v.idCargo !== '' ? Number(v.idCargo) : null,
         idMetadatoValor: v.idMetadatoValor !== '' ? v.idMetadatoValor : null,
         idReglaUsuario: v.idReglaUsuario !== '' ? Number(v.idReglaUsuario) : null,
@@ -1311,6 +1364,7 @@ export class DiagramaComponent {
             meta.codigo_bloque,
           ),
           value: claveCompuestaMetadato(meta.codigo_bloque, meta.id_metadato),
+          nombreMetadato: meta.nombre_metadato,
           idMetadato: meta.id_metadato,
           tipo: meta.tipo_metadato,
           codigoBloque: meta.codigo_bloque,
@@ -1426,7 +1480,11 @@ export class DiagramaComponent {
     const par = this.mensajeReferenciasDe(target).at(index);
     const docId = par?.controls.idDocumento.value ?? '';
 
-    return docId === '' ? [] : (this.mensajeMetadatosCache.get(Number(docId)) ?? []);
+    return docId === ''
+      ? []
+      : (this.mensajeMetadatosCache.get(Number(docId)) ?? []).filter((opcion) =>
+          TIPOS_METADATO_DESTINATARIO.includes(opcion.tipo ?? ''),
+        );
   }
 
   protected mensajeParEsDgd(
@@ -1513,7 +1571,9 @@ export class DiagramaComponent {
 
     const nombreDocumento = this.labelDocumentoOFormulario(docId);
 
-    return `/insertar//var/${metadato.label}%${nombreDocumento}%${metadato.codigoBloque ?? ''}%${metadato.idMetadato}/insertar/`;
+    // Formato legacy: nombre plano del metadato + nombre del doc común +
+    // idBloque + idMetadato (ver tokens reales en legacy.xml).
+    return `/insertar//var/${metadato.nombreMetadato ?? metadato.label}%${nombreDocumento}%${metadato.idBloque ?? ''}%${metadato.idMetadato}/insertar/`;
   }
 
   protected construirTokenLink(): string {
@@ -1660,6 +1720,9 @@ export class DiagramaComponent {
     const valores = this.mensajeElementoForm.getRawValue();
     const faltantes: string[] = [];
 
+    if (valores.cargo === null || valores.cargo.trim() === '') {
+      return 'Selecciona el cargo del mensaje.';
+    }
     if (valores.asunto.trim() === '') {
       faltantes.push('asunto');
     }
@@ -1705,6 +1768,7 @@ export class DiagramaComponent {
     const valores = this.mensajeElementoForm.getRawValue();
 
     return {
+      cargo: valores.cargo,
       destinatarios: this.buildMensajeDestinatarios(valores.destinatarios),
       destinatariosCc: this.buildMensajeDestinatarios(valores.destinatariosCc),
       enviarACargo: valores.enviarACargo,
@@ -1759,6 +1823,7 @@ export class DiagramaComponent {
 
     this.mensajeElementoForm.patchValue(
       {
+        cargo: base.cargo,
         enviarACargo: base.enviarACargo,
         encabezadoInfoProceso: base.encabezadoInfoProceso,
         asunto: base.asunto,
@@ -1799,6 +1864,9 @@ export class DiagramaComponent {
   protected readonly procesoMecanismoError = signal('');
   protected readonly procesoAdvertenciaEjecucion = signal('');
   protected readonly procesoValidacionError = signal<readonly string[]>([]);
+  // True mientras la carga REST de la configuración del proceso en edición está en
+  // curso: evita guardar con mensajeConfigs/tareaConfigs incompletos (race).
+  protected readonly procesoConfiguracionCargando = signal(false);
 
   protected readonly jornadaOptions = signal<readonly SelectOption[]>([]);
   protected readonly calendarioOptions = signal<readonly SelectOption[]>([]);
@@ -1933,7 +2001,7 @@ export class DiagramaComponent {
       .pipe(takeUntilDestroyed())
       .subscribe(() => {
         this.diagramaModalPantallaCompleta.set(
-          document.fullscreenElement?.classList.contains('diagrama-modal') ?? false,
+          document.fullscreenElement?.classList.contains('cdk-overlay-container') ?? false,
         );
         setTimeout(() => this.procesoDiagramaPreview?.notificarResize());
       });
@@ -1954,6 +2022,7 @@ export class DiagramaComponent {
     });
     this.visibilidadActual.set(this.procesoForm.controls.visibilidad.value);
     this.diagramaElementoForm.controls.cargo.valueChanges.subscribe((cargo) => {
+      this.tareaCargoSeleccionado.set(cargo);
       if (this.usuariosLiviano().length === 0) {
         return;
       }
@@ -2024,6 +2093,7 @@ export class DiagramaComponent {
       this.updateDecisionValidators();
     });
     this.decisionElementoForm.controls.cargo.valueChanges.subscribe((cargo) => {
+      this.decisionCargoSeleccionado.set(cargo);
       if (this.usuariosLiviano().length === 0) {
         return;
       }
@@ -2047,6 +2117,7 @@ export class DiagramaComponent {
         this.cargarProcesosEjecucion();
       });
     this.cargarProcesosEjecucion();
+    this.reconfigurarReglasDestinoSuscripcion();
     this.cargarProcesos();
     this.cargarRoles();
     this.cargarGrupos();
@@ -2161,6 +2232,7 @@ export class DiagramaComponent {
     this.mensajeConfigs.set({});
     this.decisionConfigs.set({});
     this.configDatoSelections.set({});
+    this.procesoConfiguracionCargando.set(true);
     this.cargarConfiguracionMecanismo(row);
     this.cargarCompartirDesdeProceso(row);
     this.procesoModalVisible.set(true);
@@ -2211,11 +2283,12 @@ export class DiagramaComponent {
       return;
     }
 
-    const modal = document.querySelector<HTMLElement>(
-      '.ant-modal.diagrama-modal--fullscreen:not(.diagrama-modal--oculto)',
-    );
+    // El fullscreen se pide sobre el contenedor CDK de overlays (no sobre el
+    // .ant-modal): así los sub-modales, dropdowns y tooltips abiertos en
+    // pantalla completa quedan dentro del top layer y se muestran encima.
+    const overlayContainer = document.querySelector<HTMLElement>('.cdk-overlay-container');
 
-    if (!modal) {
+    if (!overlayContainer) {
       return;
     }
 
@@ -2225,7 +2298,7 @@ export class DiagramaComponent {
     this.diagramaModalPantallaCompleta.set(true);
 
     try {
-      await modal.requestFullscreen();
+      await overlayContainer.requestFullscreen();
     } catch {
       this.diagramaModalPantallaCompleta.set(false);
     }
@@ -2282,7 +2355,83 @@ export class DiagramaComponent {
       }
     }
 
-    return efectivos;
+    // idCargo/idMetadatoValor de las reglas se resuelven con el nodo destino
+    // (para el XML y la validación del guardado).
+    return this.reconfigurarReglasDeDestino(efectivos, flujos);
+  }
+
+  // Efecto reactivo: cualquier cambio de cargo en los cuatro tipos de nodo
+  // (o del catálogo metadatosRequeridosRol) reconfigura automáticamente las
+  // reglas de usuario de las transiciones hacia ese nodo en las configs
+  // guardadas (idCargo + metadato 'Id usuario' del rol nuevo).
+  private reconfigurarReglasDestinoSuscripcion(): void {
+    effect(() => {
+      const flujos = this.snapshotDiagramaActual()?.transitions ?? [];
+
+      if (flujos.length === 0) {
+        return;
+      }
+
+      const configs = untracked(() => this.transicionConfigs());
+      const reconfigurados = this.reconfigurarReglasDeDestino(configs, flujos);
+
+      if (reconfigurados !== configs) {
+        this.transicionConfigs.set(reconfigurados);
+      }
+    });
+  }
+
+  // Reescribe las reglas de usuario según el cargo del nodo destino de cada
+  // transición: nuevo idCargo + metadato '(Bloque sistema) | Id usuario' del rol.
+  // Destino sin cargo válido ⇒ sin cambios (la validación lo bloquea).
+  private reconfigurarReglasDeDestino(
+    configs: Record<string, TransicionConfig>,
+    flujos: readonly LegacyBpmnTransitionSnapshot[],
+  ): Record<string, TransicionConfig> {
+    if (Object.keys(configs).length === 0 || flujos.length === 0) {
+      return configs;
+    }
+
+    let resultado = configs;
+    let cambiado = false;
+
+    for (const flujo of flujos) {
+      const config = resultado[flujo.id];
+
+      if (config === undefined || config.reglasUsuario.length === 0) {
+        continue;
+      }
+
+      const cargoRaw = this.cargoDeNodo(flujo.targetId);
+      const cargo =
+        cargoRaw !== null && Number.isFinite(Number(cargoRaw)) ? Number(cargoRaw) : null;
+      const metadato = cargo !== null ? this.metadatoUsuarioPorCargo(String(cargo)) : null;
+
+      if (cargo === null || metadato === null) {
+        continue;
+      }
+
+      const nuevasReglas = config.reglasUsuario.map((regla) => ({
+        ...regla,
+        idCargo: cargo,
+        idMetadatoValor: metadato,
+      }));
+
+      const sinCambios = config.reglasUsuario.every(
+        (regla, indice) =>
+          regla.idCargo === nuevasReglas[indice].idCargo &&
+          regla.idMetadatoValor === nuevasReglas[indice].idMetadatoValor,
+      );
+
+      if (sinCambios) {
+        continue;
+      }
+
+      resultado = { ...resultado, [flujo.id]: { ...config, reglasUsuario: nuevasReglas } };
+      cambiado = true;
+    }
+
+    return cambiado ? resultado : configs;
   }
 
   private construirConfiguracionesLegacyXml(
@@ -2603,7 +2752,10 @@ export class DiagramaComponent {
         this.cargarFormulariosProcesoDesdeBackend(documentos);
         this.cargarTareasProceso(processId);
       },
-      error: () => this.documentosOptions.set([]),
+      error: () => {
+        this.documentosOptions.set([]);
+        this.procesoConfiguracionCargando.set(false);
+      },
     });
   }
 
@@ -2614,7 +2766,7 @@ export class DiagramaComponent {
         this.transicionesProceso.set(respuesta.transitions);
         this.aplicarActividadesAlDiagrama(respuesta.activities);
       },
-      error: () => undefined,
+      error: () => this.procesoConfiguracionCargando.set(false),
     });
   }
 
@@ -2750,15 +2902,20 @@ export class DiagramaComponent {
     }
 
     if (documentosReferenciados.size === 0) {
+      this.procesoConfiguracionCargando.set(false);
       return;
     }
 
     forkJoin(
       Array.from(documentosReferenciados).map((id) => this.asegurarMetadatosDocumento$(id)),
-    ).subscribe(() => {
-      this.resolverTimerMetadato(timersPendientes);
-      this.enriquecerTraspasosTarea();
-      this.resolverReferenciasMensaje();
+    ).subscribe({
+      next: () => {
+        this.resolverTimerMetadato(timersPendientes);
+        this.enriquecerTraspasosTarea();
+        this.resolverReferenciasMensaje();
+        this.procesoConfiguracionCargando.set(false);
+      },
+      error: () => this.procesoConfiguracionCargando.set(false),
     });
   }
 
@@ -2887,11 +3044,79 @@ export class DiagramaComponent {
     return config;
   }
 
-  protected transicionCargosReqRolOptions(): readonly SelectOption[] {
-    return this.metadatosRequeridosRol().map((rol) => ({
-      label: rol.nombre_rol,
-      value: String(rol.id_rol),
-    }));
+  // Cargo (rol) del nodo destino de la transición abierta, por cualquiera de
+  // los cuatro tipos de nodo con cargo (tarea/mensaje/timer/decisión): las
+  // reglas de usuario se resuelven contra ese rol.
+  protected transicionCargosDestinoOptions = computed<readonly SelectOption[]>(() => {
+    const estado = this.transicionDestinoReglasEstado();
+
+    if (!estado.valido || estado.requisito === undefined) {
+      return [];
+    }
+
+    return [{ label: estado.requisito.nombre_rol, value: String(estado.requisito.id_rol) }];
+  });
+
+  // Estado del destino para las reglas de usuario: el cargo solo es VÁLIDO si
+  // el rol existe en metadatosRequeridosRol y expone '(Bloque sistema) | Id
+  // usuario'; si no, se trata como destino sin cargo (warning/bloqueo).
+  protected readonly transicionDestinoReglasEstado = computed(() => {
+    const cargo = this.cargoNodoDestino();
+    const requisito =
+      cargo !== null
+        ? this.metadatosRequeridosRol().find((rol) => String(rol.id_rol) === cargo)
+        : undefined;
+    const metadatoUsuario = requisito !== undefined ? this.idMetadatoUsuario(requisito) : null;
+
+    return {
+      cargo,
+      requisito,
+      metadatoUsuario,
+      valido: requisito !== undefined && metadatoUsuario !== null,
+    };
+  });
+
+  private cargoNodoDestino(): string | null {
+    return this.cargoDeNodo(this.transicionDestinoId());
+  }
+
+  private cargoDeNodo(idNodo: string | null): string | null {
+    if (idNodo === null) {
+      return null;
+    }
+
+    const cargo =
+      this.tareaConfigs()[idNodo]?.cargo ??
+      this.mensajeConfigs()[idNodo]?.cargo ??
+      this.timerConfigs()[idNodo]?.cargo ??
+      this.decisionConfigs()[idNodo]?.cargo ??
+      null;
+
+    return cargo !== null && cargo.trim() !== '' ? cargo : null;
+  }
+
+  private idMetadatoUsuario(
+    requisito: MetadatoRequeridoRol,
+  ): string | null {
+    const metadato = requisito.metadatosRequeridos.find(
+      (m) =>
+        m.nombre_metadato.trim() === 'Id usuario' &&
+        (m.nombre_bloque ?? '').trim() === '(Bloque sistema)',
+    );
+
+    return metadato !== undefined ? String(metadato.id_metadato) : null;
+  }
+
+  private metadatoUsuarioPorCargo(cargo: string | null): string | null {
+    if (cargo === null || cargo.trim() === '') {
+      return null;
+    }
+
+    const requisito = this.metadatosRequeridosRol().find(
+      (rol) => String(rol.id_rol) === cargo.trim(),
+    );
+
+    return requisito !== undefined ? this.idMetadatoUsuario(requisito) : null;
   }
 
   protected transicionMetadatosReqRolDeFila(
@@ -2927,6 +3152,18 @@ export class DiagramaComponent {
     const opcion = this.mensajeMetadatosCache.get(Number(idDoc))?.find((o) => o.value === clave);
 
     return opcion?.tipo === 'CBX';
+  }
+
+  private interpretacionPermitidaDe(
+    idDocumento: string,
+    clave: string,
+    valor: TransicionInterpretacion,
+  ): TransicionInterpretacion {
+    const opcion = this.mensajeMetadatosCache
+      .get(Number(idDocumento))
+      ?.find((o) => o.value === clave);
+
+    return opcion?.tipo === 'CBX' ? valor : 'texto';
   }
 
   protected transicionOperadoresDeFila(
@@ -3060,6 +3297,7 @@ export class DiagramaComponent {
       const transaccion = info as BpmnTransicionInfo;
       this.transicionCombo.set({ origen: transaccion.origen, destino: transaccion.destino });
       this.transicionOrigenId.set(transaccion.origenId ?? null);
+      this.transicionDestinoId.set(transaccion.destinoId ?? null);
       this.diagramaElementoNombreInput.set(info.nombre);
       const precargada = this.construirTransicionPrecargada(
         transaccion.origenId ?? null,
@@ -3155,6 +3393,7 @@ export class DiagramaComponent {
       this.timerConfigs.update((configs) => ({
         ...configs,
         [elemento.id]: {
+          cargo: formValue.cargo,
           modo: formValue.modo,
           datoFijoTipo: formValue.datoFijoTipo,
           duracionValor: esTiempo ? formValue.duracionValor : null,
@@ -3229,6 +3468,9 @@ export class DiagramaComponent {
       { ...base, usuarios: [...base.usuarios] },
       { emitEvent: false },
     );
+    // patchValue no emite valueChanges: sincronizar el espejo a mano para que
+    // tareaUsuariosDisponibles refleje el cargo restaurado.
+    this.tareaCargoSeleccionado.set(base.cargo);
     this.updateFuncionalidadTareaValidator(base.ejecutaFuncionalidad);
     this.updateJornadaCalendarioTareaValidators(base.aplicarJornadaLaboral);
     this.diagramaElementoForm.markAsPristine();
@@ -3256,6 +3498,15 @@ export class DiagramaComponent {
     this.procesoMecanismoError.set('');
     this.procesoAdvertenciaEjecucion.set('');
     this.procesoValidacionError.set([]);
+
+    // La carga REST de la configuración (formularios, nodos, mensajes) puede
+    // aún estar en curso: guardar ahora enviaría configs vacías/parciales.
+    if (this.procesoConfiguracionCargando()) {
+      this.procesoValidacionError.set([
+        'La configuración del proceso aún se está cargando. Reintente en unos segundos.',
+      ]);
+      return;
+    }
 
     this.validarCatalogosPublicacion();
     // La validación del diagrama corre antes del chequeo de campos: si el
@@ -3680,6 +3931,12 @@ export class DiagramaComponent {
     );
   }
 
+  // Firmable es una propiedad del documento que respalda al formulario
+  // (DocumentoLiviano.es_firmable), ya indexada en documentosLivianoFirmables.
+  protected formularioEsFirmable(fila: FormularioProcesoConfig): boolean {
+    return this.documentosLivianoFirmables().has(String(fila.idFormulario));
+  }
+
   protected resumenCompartido(fila: FormularioProcesoConfig): string {
     const compartido = fila.compartido;
 
@@ -3923,8 +4180,10 @@ export class DiagramaComponent {
   protected traspasoFormulariosOrigen(): readonly FormularioProcesoConfig[] {
     const seleccionada = this.formularioSeleccionadoFila();
 
+    // La excepción es por fila (id local): si otra fila del proceso apunta al
+    // mismo documento, igualmente debe poder usarse como origen de traspaso.
     return this.formulariosProceso().filter(
-      (f) => f.idFormulario !== 0 && f.idFormulario !== seleccionada?.idFormulario,
+      (f) => f.idFormulario !== 0 && f.id !== seleccionada?.id,
     );
   }
 
@@ -4290,11 +4549,12 @@ export class DiagramaComponent {
   private construirExtrasCrearProceso(
     formValue: ProcesoModalFormValue,
   ): CrearProcesoRequestExtras {
-    const transicionConfigsEfectivos: Record<string, TransicionConfig> = {
+    const flujos = this.snapshotDiagramaActual()?.transitions ?? [];
+    let transicionConfigsEfectivos: Record<string, TransicionConfig> = {
       ...this.transicionConfigs(),
     };
 
-    for (const flujo of this.snapshotDiagramaActual()?.transitions ?? []) {
+    for (const flujo of flujos) {
       if (transicionConfigsEfectivos[flujo.id] !== undefined) {
         continue;
       }
@@ -4305,6 +4565,12 @@ export class DiagramaComponent {
         transicionConfigsEfectivos[flujo.id] = precargada;
       }
     }
+
+    // El POST también debe recibir el cargo destino resuelto en las reglas.
+    transicionConfigsEfectivos = this.reconfigurarReglasDeDestino(
+      transicionConfigsEfectivos,
+      flujos,
+    );
 
     return {
       mecanismo: this.selectedMecanismo(),
@@ -4365,7 +4631,7 @@ export class DiagramaComponent {
     return {
       idMetadato: metadato.id_metadato,
       idBloque: metadato.id_bloque ?? null,
-      codigoBloque: null,
+      codigoBloque: metadato.codigo_bloque ?? null,
       tipo: null,
     };
   }

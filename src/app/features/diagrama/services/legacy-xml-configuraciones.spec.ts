@@ -381,11 +381,19 @@ describe('LegacyXmlConfiguracionesService', () => {
     expect(mensaje?.querySelector('metadatosMensajeCc')).not.toBeNull();
   });
 
-  it('marca conCopia cuando el mensaje tiene destinatarios en copia', () => {
+  it('persiste los destinatarios del mensaje (usuarios para/cc y referencias)', () => {
     const document = aplicar({
       mensajeConfigs: {
         'Mensaje 1': {
           ...buildDefaultMensajeConfig(),
+          asunto: 'Asunto',
+          contenido: 'Contenido',
+          cargo: '46',
+          destinatarios: {
+            usuariosSistema: ['jperez'],
+            usuariosExternos: ['a@mail.cl'],
+            referencias: [{ idDocumento: 795, idMetadato: 'BM2172-1219' }],
+          },
           destinatariosCc: {
             usuariosSistema: ['mrojas'],
             usuariosExternos: [],
@@ -397,6 +405,35 @@ describe('LegacyXmlConfiguracionesService', () => {
 
     const mensaje = document.querySelector('mensaje#Mensaje\\ 1');
     expect(mensaje?.getAttribute('conCopia')).toBe('true');
+    expect(mensaje?.getAttribute('swimlane')).toBe('46');
+
+    const usuarios = Array.from(
+      mensaje?.getElementsByTagName('usuariosMensaje')[0]?.getElementsByTagName('usuario') ?? [],
+    );
+    expect(usuarios.length).toBe(3);
+    expect(usuarios[0]?.getAttribute('usuario_sistema')).toBe('true');
+    expect(usuarios[0]?.getAttribute('copia')).toBe('false');
+    expect(usuarios[0]?.getAttribute('destinatario')).toBe('jperez');
+    expect(usuarios[1]?.getAttribute('usuario_sistema')).toBe('false');
+    expect(usuarios[1]?.getAttribute('destinatario')).toBe('a@mail.cl');
+    expect(usuarios[2]?.getAttribute('copia')).toBe('true');
+    expect(usuarios[2]?.getAttribute('destinatario')).toBe('mrojas');
+
+    const metadato = mensaje
+      ?.getElementsByTagName('metadatosMensaje')[0]
+      ?.getElementsByTagName('metadato')[0];
+    expect(metadato?.getAttribute('docComunId')).toBe('4128');
+    expect(metadato?.getAttribute('idMetadato')).toBe('1219');
+    expect(metadato?.getAttribute('idBloque')).toBe('5641');
+    expect(metadato?.getAttribute('codigoBloque')).toBe('BM2172');
+    expect(metadato?.getAttribute('esGrilla')).toBe('false');
+    expect(metadato?.getAttribute('nombreDocComun')).toBe('Solicitud de Viático');
+
+    expect(
+      mensaje
+        ?.getElementsByTagName('metadatosMensajeCc')[0]
+        ?.getElementsByTagName('metadato').length,
+    ).toBe(0);
   });
 
   it('escribe la configuración del nodo timer y del timer de transición', () => {
@@ -404,6 +441,7 @@ describe('LegacyXmlConfiguracionesService', () => {
       timerConfigs: {
         'Timer 1': {
           ...buildDefaultTimerConfig(),
+          cargo: '46',
           modo: 'metadatoFormulario',
           idDocumento: 795,
           idMetadato: 'BM2172-1219',
@@ -446,6 +484,7 @@ describe('LegacyXmlConfiguracionesService', () => {
     });
 
     const timer = document.querySelector('timer#Timer\\ 1');
+    expect(timer?.getAttribute('swimlane')).toBe('46');
     expect(timer?.getAttribute('esMetFormulario')).toBe('true');
     expect(timer?.getAttribute('idMetadato')).toBe('1219');
     expect(timer?.getAttribute('idBloque')).toBe('5641');

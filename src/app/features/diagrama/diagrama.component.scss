@@ -175,6 +175,11 @@
   font-size: 0.8125rem;
 }
 
+.diagrama__field-error {
+  color: #e11d48;
+  font-size: 0.75rem;
+}
+
 .diagrama__field--duration {
   gap: 0.35rem;
 }
@@ -306,6 +311,14 @@
 
 .diagrama__transicion-regla-col {
   display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.diagrama__transicion-regla-col-borrar {
+  display: flex;
+  align-items: flex-end;
   flex-direction: column;
   gap: 0.55rem;
   min-width: 0;
@@ -874,6 +887,16 @@
   color: #64748b;
 }
 
+.diagrama__regla-usuario-aviso {
+  margin: 0.25rem 0 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #f0c36c;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #7c4d00;
+  font-size: 0.85rem;
+}
+
 // El modal "Diagrama asociado" se mantiene montado durante la sesión del
 // proceso: al "Listo" no se destruye, solo se oculta vía clase (el contenido
 // vive dentro del overlay CDK, por eso son estilos globales con ::ng-deep).
@@ -908,31 +931,52 @@
 }
 
 /* ====== Modo pantalla completa (Fullscreen API) ====== */
-// Llenado con valores absolutos (100vw/100vh) e !important: no depende de las
-// cadenas de %, del width inline de nzWidth ni del padding-residual de antd.
-// El fondo opaco garantiza que el ::backdrop negro del top layer nunca asome.
-::ng-deep .ant-modal:fullscreen {
-  position: fixed !important;
-  inset: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
+// El elemento fullscreen es el contenedor CDK de overlays (.cdk-overlay-container)
+// y no el .ant-modal: así cualquier sub-modal, dropdown o tooltip abierto en
+// pantalla completa queda dentro del top layer del navegador y se muestra
+// encima del diagrama. El contenedor debe conservar su pointer-events: none
+// (cada pane/backdrop lo re-habilita por sí solo): forzarlo a auto haría
+// clickeable el host invisible a pantalla completa de cada tooltip
+// (.cdk-overlay-connected-position-bounding-box al 100%x100%), provocando un
+// bucle mouseleave/hide + mouseenter/show = parpadeo y botones bloqueados.
+::ng-deep .cdk-overlay-container:fullscreen {
+  background: #ffffff;
+}
+
+// El modal llena el viewport con valores absolutos e !important: no depende
+// de las cadenas de %, del width inline de nzWidth ni del padding-residual de
+// antd. width 100% (del .ant-modal-wrap) y no 100vw para no desbordar si el
+// documento conserva scrollbar. El fondo opaco garantiza que la página asome.
+::ng-deep .ant-modal.diagrama-modal--pantalla-completa {
+  top: 0 !important;
+  width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
   min-height: 100vh;
   margin: 0 !important;
   padding: 0 !important;
   box-sizing: border-box !important;
-  overflow: hidden;
   border-radius: 0;
   background: #ffffff;
 }
 
+// Sin scrollbars en el wrap durante pantalla completa (el modal ya llena el viewport).
+::ng-deep .ant-modal-wrap:has(.ant-modal.diagrama-modal--pantalla-completa) {
+  overflow: hidden !important;
+}
+
+// Sin botón X (cerrar) en pantalla completa: el cierre queda en el footer
+// ("Salir de pantalla completa" / "Listo") y en ESC.
+::ng-deep .diagrama-modal--pantalla-completa .ant-modal-close {
+  display: none !important;
+}
+
 // Alturas absolutas: header oculto y body/footer llenan exactamente 100vh.
-::ng-deep .ant-modal:fullscreen .ant-modal-header {
+::ng-deep .diagrama-modal--pantalla-completa .ant-modal-header {
   display: none;
 }
 
-::ng-deep .ant-modal:fullscreen .ant-modal-content {
+::ng-deep .diagrama-modal--pantalla-completa .ant-modal-content {
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -942,7 +986,7 @@
   border-radius: 0;
 }
 
-::ng-deep .ant-modal:fullscreen .ant-modal-body {
+::ng-deep .diagrama-modal--pantalla-completa .ant-modal-body {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -950,25 +994,8 @@
   overflow: auto;
 }
 
-::ng-deep .ant-modal:fullscreen .ant-modal-footer {
+::ng-deep .diagrama-modal--pantalla-completa .ant-modal-footer {
   flex: 0 0 auto;
-  border-radius: 0;
-}
-
-// La clase complementaria queda para el estado lógico (botón, nzKeyboard, tests).
-::ng-deep .ant-modal.diagrama-modal--pantalla-completa {
-  top: 0;
-  margin: 0;
-  padding-bottom: 0;
-  border-radius: 0;
-}
-
-::ng-deep .diagrama-modal--pantalla-completa .ant-modal-header {
-  display: none;
-}
-
-::ng-deep .diagrama-modal--pantalla-completa .ant-modal-content {
-  height: 100%;
   border-radius: 0;
 }
 

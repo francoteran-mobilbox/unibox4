@@ -90,7 +90,7 @@ const XML_CON_TIMER = `<?xml version="1.0" encoding="UTF-8"?>
   <catalogos></catalogos>
   <Roles></Roles>
   <SubProcesosAsociados></SubProcesosAsociados>
-  <timer name="Timer 1" id="Timer 1" esTiempo="true" esMetFormulario="false" datoFijo="5" idUnidadTiempo="minutos" fecha="" hora="">
+  <timer name="Timer 1" id="Timer 1" esTiempo="true" esMetFormulario="false" datoFijo="5" idUnidadTiempo="minutos" fecha="" hora="" swimlane="42">
     <transition to="Tarea 1" id="Transicion 1" esTimer="false" interrupcion="false" />
   </timer>
   <task-node name="Tarea" id="Tarea 1">
@@ -114,6 +114,18 @@ const XML_CON_MENSAJE = `<?xml version="1.0" encoding="UTF-8"?>
   </start-state>
   <mensaje name="Msg" id="Msg 1" subject="Asunto XML" content="Contenido XML" encabezado="true" enviarUsuariosDelCargo="false" enviaFormularioExterno="false" conCopia="true">
     <transition to="Fin_1" />
+    <usuariosMensaje>
+      <usuario usuario_sistema="true" copia="false" destinatario="jperez" />
+      <usuario usuario_sistema="false" copia="false" destinatario="a@mail.cl" />
+      <usuario usuario_sistema="true" copia="true" destinatario="mrojas" />
+      <usuario usuario_sistema="false" copia="true" destinatario="cc@correo.cl" />
+    </usuariosMensaje>
+    <metadatosMensaje>
+      <metadato docComunId="3856" idMetadato="1266" idBloque="5641" codigoBloque="BM2172" esGrilla="false" nombreDocComun="Flag" />
+    </metadatosMensaje>
+    <metadatosMensajeCc>
+      <metadato docComunId="3856" idMetadato="1483" idBloque="5646" codigoBloque="BM2177" esGrilla="false" nombreDocComun="Flag" />
+    </metadatosMensajeCc>
   </mensaje>
   <end-state name="Fin" id="Fin_1" />
 </process-definition>`;
@@ -817,7 +829,8 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
     expect(transicion?.reglasUsuario).toEqual([
       {
         idReglaUsuario: null,
-        idDocIzq: 795,
+        idDocIzq: null,
+        nombreDocComun: null,
         idBloqIzq: 5641,
         codigoBloqIzq: 'BM2172',
         idMetIzq: 1266,
@@ -867,6 +880,109 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
       hora: '',
     });
     expect(transicion?.conInterrupcion).toBe(false);
+  });
+
+  it('la regla de usuario envía nombreDocComun con el nombre del formulario de proceso', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      requiereTimer: false,
+      accionRequerida: false,
+      reglasUsuario: [
+        {
+          idDocumento: 660,
+          idMetadato: 'BM2172-1266',
+          interpretacion: 'texto',
+          idCargo: 46,
+          idMetadatoValor: '873',
+          idReglaUsuario: 18681,
+        },
+      ],
+      reglasNegocio: [],
+    };
+
+    const request = builder.buildRequest(
+      FORM_SOURCE,
+      XML_CON_TRANSICIONES,
+      'admin',
+      undefined,
+      [
+        {
+          id: 'fp-1',
+          nombre: 'Solicitud Renombrada',
+          idFormulario: 660,
+          visibilidad: 'privado',
+        },
+      ],
+      {
+        transicionConfigs: { Transicion_1: transicionConfig },
+        resolverMetadato: construirResolver({
+          'BM2172-1266': { idMetadato: 1266, idBloque: 5641, codigoBloque: 'BM2172', tipo: 'ALF' },
+        }),
+      },
+    );
+
+    const transicion = request.transiciones.find(
+      (wrapper) => wrapper.idActividadDestino === 'Fin_1',
+    );
+
+    expect(transicion?.reglasUsuario[0]).toEqual(
+      jasmine.objectContaining({
+        idReglaUsuario: 18681,
+        idDocIzq: null,
+        nombreDocComun: 'Solicitud Renombrada',
+        idRolDer: 46,
+      }),
+    );
+  });
+
+  it('campoValor2 solo viaja true con metadato de origen tipo CBX y codigoBloqDer usa el codigo del rol', () => {
+    const builder = new CrearProcesoRequestBuilder();
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      requiereTimer: false,
+      accionRequerida: false,
+      reglasUsuario: [
+        {
+          idDocumento: 660,
+          idMetadato: 'BM2172-1266',
+          interpretacion: 'id',
+          idCargo: 46,
+          idMetadatoValor: '873',
+          idReglaUsuario: null,
+        },
+        {
+          idDocumento: 660,
+          idMetadato: 'BM2177-1483',
+          interpretacion: 'id',
+          idCargo: 46,
+          idMetadatoValor: '873',
+          idReglaUsuario: null,
+        },
+      ],
+      reglasNegocio: [],
+    };
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TRANSICIONES, 'admin', undefined, undefined, {
+      transicionConfigs: { Transicion_1: transicionConfig },
+      resolverMetadato: construirResolver({
+        'BM2172-1266': { idMetadato: 1266, idBloque: 5641, codigoBloque: 'BM2172', tipo: 'CBX' },
+        'BM2177-1483': { idMetadato: 1483, idBloque: 5646, codigoBloque: 'BM2177', tipo: 'ALF' },
+      }),
+      resolverMetadatoRol: (idRol, idMetadato) =>
+        idRol === 46 && idMetadato === 873
+          ? { idMetadato: 873, idBloque: 4445, codigoBloque: 'BM1191', tipo: null }
+          : null,
+    });
+
+    const transicion = request.transiciones.find(
+      (wrapper) => wrapper.idActividadDestino === 'Fin_1',
+    );
+
+    expect(transicion?.reglasUsuario.map((regla) => regla.campoValor2)).toEqual([true, false]);
+    expect(transicion?.reglasUsuario[0]).toEqual(
+      jasmine.objectContaining({ idBloqDer: 4445, codigoBloqDer: 'BM1191' }),
+    );
   });
 
   it('regla de negocio con valor de otro metadato arma operandoDer como documento', () => {
@@ -1088,6 +1204,7 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
       timerConfigs: {
         'Timer 1': {
           ...buildDefaultTimerConfig(),
+          cargo: '46',
           modo: 'datoFijo',
           datoFijoTipo: 'tiempo',
           duracionValor: 5,
@@ -1099,6 +1216,7 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
     const timerActivity = request.actividades.find(
       (wrapper) => wrapper.actividad.activitytypeId === 'timer',
     );
+    expect(timerActivity?.actividad.idRol).toBe(46);
     expect(timerActivity?.timer).toEqual({
       idTimerProceso: null,
       esMetFormulario: false,
@@ -1128,6 +1246,8 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
     const timerActivity = request.actividades.find(
       (wrapper) => wrapper.actividad.activitytypeId === 'timer',
     );
+    // El cargo del nodo timer se recupera del swimlane persistido (fallback XML).
+    expect(timerActivity?.actividad.idRol).toBe(42);
     expect(timerActivity?.timer).toEqual({
       idTimerProceso: null,
       esMetFormulario: false,
@@ -1270,6 +1390,20 @@ describe('CrearProcesoRequestBuilder - mensaje', () => {
     });
   });
 
+  it('la actividad mensaje envía idRol del cargo asociado (sin cargo → -1)', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const conCargo = actividadMensaje(builder, {
+      mensajeConfigs: {
+        'Msg 1': { ...buildDefaultMensajeConfig(), cargo: '46' },
+      },
+    });
+    expect(conCargo?.actividad.idRol).toBe(46);
+
+    const sinCargo = actividadMensaje(builder);
+    expect(sinCargo?.actividad.idRol).toBe(-1);
+  });
+
   it('la actividad mensaje sin config recupera el mensaje guardado del XML', () => {
     const builder = new CrearProcesoRequestBuilder();
 
@@ -1282,13 +1416,29 @@ describe('CrearProcesoRequestBuilder - mensaje', () => {
       cc: true,
       enviaACargo: false,
       enviaFormularioExterno: false,
-      usuariosSistema: [],
-      usuariosSistemaCc: [],
-      usuariosExternos: [],
-      usuariosExternosCc: [],
+      usuariosSistema: ['jperez'],
+      usuariosSistemaCc: ['mrojas'],
+      usuariosExternos: ['a@mail.cl'],
+      usuariosExternosCc: ['cc@correo.cl'],
       rolesSistema: [],
-      destinatariosMetadato: [],
-      destinatariosMetadatoCc: [],
+      destinatariosMetadato: [
+        {
+          nombreDocComun: 'Flag',
+          idMetadato: 1266,
+          idBloque: 5641,
+          codigoBloque: 'BM2172',
+          esGrilla: false,
+        },
+      ],
+      destinatariosMetadatoCc: [
+        {
+          nombreDocComun: 'Flag',
+          idMetadato: 1483,
+          idBloque: 5646,
+          codigoBloque: 'BM2177',
+          esGrilla: false,
+        },
+      ],
       documentosFormulario: [],
       documentosAdjuntos: [],
     });

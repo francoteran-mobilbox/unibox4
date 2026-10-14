@@ -230,10 +230,12 @@ export function construirTimerConfigDesdeActividad(
   formularios: readonly FormularioProcesoConfig[],
 ): TimerConfig {
   const timer = actividad.timers[0];
+  const cargo = cargoDeActividad(actividad);
 
   if (timer === undefined) {
     return {
       ...buildDefaultTimerConfig(),
+      cargo,
       activityId: actividad.activity_id,
     };
   }
@@ -244,6 +246,7 @@ export function construirTimerConfigDesdeActividad(
   const duracionValor = esTiempo ? numberOrNull(timer.dato_fijo) : null;
 
   return {
+    cargo,
     modo,
     datoFijoTipo,
     duracionValor,
@@ -291,6 +294,14 @@ function numberOrNull(valor: string | number | null | undefined): number | null 
   return Number.isFinite(numero) ? numero : null;
 }
 
+// El cargo asociado del nodo viaja en el id_rol de la actividad (tarea,
+// decisión, mensaje y timer). Legacy: id_rol -1 = sin cargo.
+function cargoDeActividad(actividad: ActividadTareaProceso): string | null {
+  const idRol = actividad.id_rol;
+
+  return idRol !== undefined && idRol !== null && idRol > 0 ? String(idRol) : null;
+}
+
 export function construirMensajeConfigDesdeActividad(
   actividad: ActividadTareaProceso,
   formularios: readonly FormularioProcesoConfig[],
@@ -312,18 +323,33 @@ export function construirMensajeConfigDesdeActividad(
         : null,
     }));
 
+  // El backend entrega los destinatarios en una única lista de objetos:
+  // (copia=false→Para) y (usuario_sistema=true→sistema, false→externo/e-mail).
+  const usuarios = mensaje.usuarios ?? [];
+
+  const extraerDestinatarios = (copia: boolean, sistema: boolean): string[] =>
+    usuarios
+      .filter(
+        (usuario) =>
+          (usuario.copia === true) === copia &&
+          (usuario.usuario_sistema === true) === sistema,
+      )
+      .map((usuario) => usuario.destinatario ?? '')
+      .filter((destinatario) => destinatario.trim() !== '');
+
   const destinatarios: MensajeDestinatarios = {
-    usuariosSistema: [...(mensaje.usuarios ?? [])],
-    usuariosExternos: [],
+    usuariosSistema: extraerDestinatarios(false, true),
+    usuariosExternos: extraerDestinatarios(false, false),
     referencias: referencias(mensaje.metadatosDestino),
   };
 
   return {
     ...base,
+    cargo: cargoDeActividad(actividad),
     destinatarios,
     destinatariosCc: {
-      usuariosSistema: [],
-      usuariosExternos: [],
+      usuariosSistema: extraerDestinatarios(true, true),
+      usuariosExternos: extraerDestinatarios(true, false),
       referencias: referencias(mensaje.metadatosDestinoCC),
     },
     enviarACargo: mensaje.envia_a_cargo === true,
@@ -349,6 +375,26 @@ export function idFormularioPorDocComun(
   const fila = formularios.find((f) => f.docComunId === docComunId);
 
   return fila === undefined ? null : fila.idFormulario;
+}
+
+// id_doc_izq de reglaUsuario viaja en el espacio de id de formulario de proceso
+// (contrato actual). El fallback por docComunId cubre procesos guardados con el
+// contrato anterior.
+export function idFormularioPorDocId(
+  formularios: readonly FormularioProcesoConfig[],
+  docId: number | null | undefined,
+): number | null {
+  if (docId === null || docId === undefined) {
+    return null;
+  }
+
+  const porIdFormulario = formularios.find((f) => f.idFormulario === docId);
+
+  if (porIdFormulario !== undefined) {
+    return porIdFormulario.idFormulario;
+  }
+
+  return idFormularioPorDocComun(formularios, docId);
 }
 
 function idFormularioPorNombreComun(
@@ -394,14 +440,15 @@ export function construirReglaUsuarioDesdeActividad(
   formularios: readonly FormularioProcesoConfig[],
 ): TransicionReglaUsuario {
   return {
-    idDocumento: idFormularioPorDocComun(formularios, regla.id_doc_izq),
+    idDocumento: idFormularioPorDocId(formularios, regla.id_doc_izq),
     idMetadato:
       regla.id_met_izq !== undefined && regla.id_met_izq !== null
         ? claveMetadatoDesdeActividad(regla.codigo_bloq_izq, regla.id_met_izq)
         : null,
     interpretacion: regla.campo_valor2 === true ? 'id' : 'texto',
     idCargo: regla.id_rol_der ?? null,
-    // Los metadatos de rol no traen codigo_bloque: el value del option es el id crudo.
+    // El value del option de metadatos de rol es el id crudo (sin clave compuesta);
+    // el codigo_bloque correspondiente viaja aparte en el submit (codigoBloqDer).
     idMetadatoValor:
       regla.id_met_der !== undefined && regla.id_met_der !== null
         ? String(regla.id_met_der)

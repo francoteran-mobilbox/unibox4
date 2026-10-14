@@ -241,6 +241,18 @@ describe('tareas-proceso.mapper', () => {
     expect(config.duracionUnidad).toBe('dias');
     expect(config.idDocumento).toBeNull();
     expect(config.activityId).toBe(actividad.activity_id);
+    expect(config.cargo).toBe('46');
+  });
+
+  it('mapea el cargo del nodo timer desde id_rol (-1 legacy → null)', () => {
+    const actividad = actividadBase({
+      id_rol: -1,
+      activitytype_id: 'timer',
+      es_timer: true,
+      timers: [],
+    });
+
+    expect(construirTimerConfigDesdeActividad(actividad, FORMULARIOS).cargo).toBeNull();
   });
 
   it('mapea timer en modo fecha', () => {
@@ -343,7 +355,24 @@ describe('tareas-proceso.mapper', () => {
           envia_a_cargo: true,
           encabezado: true,
           envia_formulario_externo: true,
-          usuarios: ['jperez', 'mrojas'],
+          // Formato real del backend: una lista con flags copia/usuario_sistema.
+          usuarios: [
+            { id_mensaje: 12301, usuario_sistema: true, copia: false, destinatario: 'jperez' },
+            { id_mensaje: 12301, usuario_sistema: true, copia: false, destinatario: 'mrojas' },
+            {
+              id_mensaje: 12301,
+              usuario_sistema: false,
+              copia: false,
+              destinatario: 'externo@correo.cl',
+            },
+            { id_mensaje: 12301, usuario_sistema: true, copia: true, destinatario: 'scastro' },
+            {
+              id_mensaje: 12301,
+              usuario_sistema: false,
+              copia: true,
+              destinatario: 'cc@correo.cl',
+            },
+          ],
           roles: [],
           documentos: [],
           documentosComunesAdjuntos: [
@@ -363,15 +392,19 @@ describe('tareas-proceso.mapper', () => {
     const config = construirMensajeConfigDesdeActividad(actividad, FORMULARIOS);
 
     expect(config.asunto).toBe('Notificación');
+    expect(config.cargo).toBe('46');
     expect(config.contenido).toBe('Hola');
     expect(config.enviarACargo).toBeTrue();
     expect(config.encabezadoInfoProceso).toBeTrue();
     expect(config.completarFormulario).toBe('externo');
     expect(config.adjuntarPdfIds).toEqual([795, 802]);
     expect(config.destinatarios.usuariosSistema).toEqual(['jperez', 'mrojas']);
+    expect(config.destinatarios.usuariosExternos).toEqual(['externo@correo.cl']);
     expect(config.destinatarios.referencias).toEqual([
       { idDocumento: 795, idMetadato: '57' },
     ]);
+    expect(config.destinatariosCc.usuariosSistema).toEqual(['scastro']);
+    expect(config.destinatariosCc.usuariosExternos).toEqual(['cc@correo.cl']);
     expect(config.destinatariosCc.referencias).toEqual([
       { idDocumento: 802, idMetadato: '336' },
     ]);
@@ -558,6 +591,47 @@ reglasUsuario: [
         idCargo: 38,
         idMetadatoValor: '873',
         idReglaUsuario: 18639,
+      }),
+    );
+  });
+
+  it('resuelve id_doc_izq en espacio de id de formulario de proceso', () => {
+    const transicion: TransicionTareaProceso = {
+      transition_id: 79282,
+      process_id: 1248,
+      activity_id_source: 58735,
+      activity_id_destination: 58736,
+      transition_name: '',
+      levanta_form: false,
+      tiene_timer: false,
+      timers: [],
+            reglasUsuario: [
+        {
+          id_regla_usuario: 18681,
+          transition_id: 79282,
+          id_doc_izq: 795,
+          id_bloq_izq: 5633,
+          codigo_bloq_izq: 'BM2163',
+          id_met_izq: 1299,
+          id_rol_der: 1,
+          id_bloq_der: 3449,
+          id_met_der: 873,
+          campo_valor2: true,
+        },
+      ],
+      reglasNegocio: [],
+    };
+
+    const config = construirTransicionConfigDesdeActividad(transicion, FORMULARIOS);
+
+    expect(config.reglasUsuario[0]).toEqual(
+      jasmine.objectContaining({
+        idDocumento: 795,
+        idMetadato: 'BM2163-1299',
+        interpretacion: 'id',
+        idCargo: 1,
+        idMetadatoValor: '873',
+        idReglaUsuario: 18681,
       }),
     );
   });

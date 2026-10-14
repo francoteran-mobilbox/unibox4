@@ -176,6 +176,7 @@ export interface MetadatoRequeridoRol {
     readonly nombre_metadato: string;
     readonly nombre_bloque?: string;
     readonly id_bloque?: number;
+    readonly codigo_bloque?: string;
   }[];
 }
 
@@ -276,6 +277,13 @@ export interface DocumentoComunAdjuntoMensaje {
   readonly nombre_documento_comun?: string;
 }
 
+export interface MensajeUsuarioActividad {
+  readonly id_mensaje?: number;
+  readonly usuario_sistema?: boolean;
+  readonly copia?: boolean;
+  readonly destinatario?: string;
+}
+
 export interface MensajeProcesoActividad {
   readonly id_mensaje?: number;
   readonly activity_id?: number;
@@ -285,7 +293,7 @@ export interface MensajeProcesoActividad {
   readonly encabezado?: boolean;
   readonly con_copia?: boolean;
   readonly envia_formulario_externo?: boolean;
-  readonly usuarios?: readonly string[];
+  readonly usuarios?: readonly MensajeUsuarioActividad[];
   readonly roles?: readonly unknown[];
   readonly documentos?: readonly unknown[];
   readonly documentosComunesAdjuntos?: readonly DocumentoComunAdjuntoMensaje[];

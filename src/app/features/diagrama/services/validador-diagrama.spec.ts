@@ -345,6 +345,7 @@ describe('validarDominioDiagrama', () => {
   it('reporta timer incompleto según modo', () => {
     const timerConfig: TimerConfig = {
       ...buildDefaultTimerConfig(),
+      cargo: '46',
       modo: 'datoFijo',
       datoFijoTipo: 'tiempo',
       duracionValor: 2,
@@ -365,6 +366,33 @@ describe('validarDominioDiagrama', () => {
     expect(resultados.some((r) => r.mensaje.includes('está incompleto'))).toBeTrue();
   });
 
+  it('reporta timer sin cargo seleccionado', () => {
+    const timerConfig: TimerConfig = {
+      ...buildDefaultTimerConfig(),
+      modo: 'datoFijo',
+      datoFijoTipo: 'tiempo',
+      duracionValor: 2,
+      duracionUnidad: 'dias',
+    };
+
+    const snapshot = {
+      nodes: [
+        nodo('S', 'bpmn:StartEvent', { name: 'Inicio' }),
+        nodo('W', 'bpmn:IntermediateCatchEvent', { name: 'Timer', hasTimerEventDefinition: true }),
+        nodo('F', 'bpmn:EndEvent', { name: 'Fin' }),
+      ],
+      transitions: [flujo('f1', 'S', 'W'), flujo('f2', 'W', 'F')],
+    };
+
+    const resultados = validarDominioDiagrama(snapshot, entrada({ timerConfigs: { W: timerConfig } }));
+
+    expect(
+      resultados.some(
+        (r) => r.elementoId === 'W' && r.mensaje.includes('no tiene cargo seleccionado'),
+      ),
+    ).toBeTrue();
+  });
+
   it('reporta mensaje sin destino ni asunto', () => {
     const mensajeConfig: MensajeConfig = buildDefaultMensajeConfig();
 
@@ -383,8 +411,40 @@ describe('validarDominioDiagrama', () => {
     );
 
     expect(
-      resultados.some((r) => r.mensaje.includes('está incompleto: asunto, contenido, destinatarios')),
+      resultados.some((r) =>
+        r.mensaje.includes('está incompleto: cargo, asunto, contenido, destinatarios'),
+      ),
     ).toBeTrue();
+  });
+
+  it('acepta mensaje con cargo y destino configurado', () => {
+    const mensajeConfig: MensajeConfig = {
+      ...buildDefaultMensajeConfig(),
+      cargo: '46',
+      asunto: 'A',
+      contenido: 'C',
+      destinatarios: {
+        usuariosSistema: ['jperez'],
+        usuariosExternos: [],
+        referencias: [],
+      },
+    };
+
+    const snapshot = {
+      nodes: [
+        nodo('S', 'bpmn:StartEvent', { name: 'Inicio' }),
+        nodo('M', 'bpmn:IntermediateThrowEvent', { name: 'Mensaje', hasMessageEventDefinition: true }),
+        nodo('F', 'bpmn:EndEvent', { name: 'Fin' }),
+      ],
+      transitions: [flujo('f1', 'S', 'M'), flujo('f2', 'M', 'F')],
+    };
+
+    const resultados = validarDominioDiagrama(
+      snapshot,
+      entrada({ mensajeConfigs: { M: mensajeConfig } }),
+    );
+
+    expect(resultados.some((r) => r.elementoId === 'M')).toBeFalse();
   });
 
   it('omite la validación de mensaje cuando omitirValidacionMensaje es true', () => {
@@ -512,6 +572,100 @@ describe('validarDominioDiagrama', () => {
     );
 
     expect(resultados.some((r) => r.mensaje.includes('reglas de usuario incompletas'))).toBeTrue();
+  });
+
+  it('exige cargo en la tarea destino cuando la transición tiene reglas de usuario', () => {
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      reglasUsuario: [
+        {
+          idDocumento: 795,
+          idMetadato: 'BM2163-1299',
+          interpretacion: 'texto',
+        },
+      ],
+    };
+
+    const resultados = validarDominioDiagrama(
+      snapshotBase(),
+      entrada({ transicionConfigs: { 'S-T': transicionConfig } }),
+    );
+
+    expect(
+      resultados.some((r) => r.mensaje.includes('el nodo destino no tiene cargo')),
+    ).toBeTrue();
+  });
+
+  it('acepta reglas de usuario hacia un timer destino con cargo', () => {
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      reglasUsuario: [
+        {
+          idDocumento: 795,
+          idMetadato: 'BM2163-1299',
+          interpretacion: 'texto',
+          idCargo: 1,
+          idMetadatoValor: '873',
+        },
+      ],
+    };
+
+    const snapshotConTimer = {
+      nodes: [
+        nodo('S', 'bpmn:StartEvent', { name: 'Inicio' }),
+        nodo('W', 'bpmn:IntermediateCatchEvent', { name: 'Timer', hasTimerEventDefinition: true }),
+        nodo('F', 'bpmn:EndEvent', { name: 'Fin' }),
+      ],
+      transitions: [flujo('S-W', 'S', 'W'), flujo('W-F', 'W', 'F')],
+    };
+
+    const resultados = validarDominioDiagrama(
+      snapshotConTimer,
+      entrada({
+        timerConfigs: {
+          W: {
+            ...buildDefaultTimerConfig(),
+            cargo: '46',
+            modo: 'datoFijo',
+            datoFijoTipo: 'tiempo',
+            duracionValor: 2,
+            duracionUnidad: 'dias',
+          },
+        },
+        transicionConfigs: { 'S-W': transicionConfig },
+      }),
+    );
+
+    expect(
+      resultados.some((r) => r.mensaje.includes('el nodo destino no tiene cargo')),
+    ).toBeFalse();
+  });
+
+  it('acepta reglas de usuario cuando la tarea destino tiene cargo', () => {
+    const transicionConfig: TransicionConfig = {
+      ...buildDefaultTransicionConfig(),
+      reglasUsuario: [
+        {
+          idDocumento: 795,
+          idMetadato: 'BM2163-1299',
+          interpretacion: 'texto',
+        },
+      ],
+    };
+
+    const resultados = validarDominioDiagrama(
+      snapshotBase(),
+      entrada({
+        tareaConfigs: {
+          T: { ...buildDefaultTareaConfig('Tarea'), cargo: '46' },
+        },
+        transicionConfigs: { 'S-T': transicionConfig },
+      }),
+    );
+
+    expect(
+      resultados.some((r) => r.mensaje.includes('la tarea destino no tiene cargo')),
+    ).toBeFalse();
   });
 });
 

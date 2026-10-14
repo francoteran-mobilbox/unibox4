@@ -8,7 +8,11 @@ import type {
   DetalleMetadatoLegacy,
 } from '../models/legacy-xml-configuraciones.model';
 import type { DecisionConfig } from '../models/decision-config.model';
-import type { MensajeConfig } from '../models/mensaje-config.model';
+import type {
+  MensajeConfig,
+  MensajeDestinatarios,
+  MensajeReferenciaPar,
+} from '../models/mensaje-config.model';
 import { mensajeDestinoConfigurado } from '../models/mensaje-config.model';
 import type {
   FormularioRequeridoSeleccion,
@@ -507,6 +511,9 @@ export class LegacyXmlConfiguracionesService {
       return;
     }
 
+    // Cargo asociado del nodo mensaje: viaja por swimlane (mismo contrato que
+    // tarea/decisión) y por ActividadRequest.idRol en el POST.
+    elemento.setAttribute('swimlane', config.cargo ?? '');
     elemento.setAttribute('subject', config.asunto ?? '');
     elemento.setAttribute('content', config.contenido ?? '');
     elemento.setAttribute('encabezado', String(config.encabezadoInfoProceso));
@@ -517,15 +524,125 @@ export class LegacyXmlConfiguracionesService {
     );
     elemento.setAttribute('conCopia', String(mensajeDestinoConfigurado(config.destinatariosCc)));
 
-    for (const etiqueta of ['metadatosMensaje', 'metadatosMensajeCc'] as const) {
-      const contenedor = elemento.getElementsByTagName(etiqueta)[0] ?? null;
+    // Los destinatarios se persisten en el XML: sin esta data, revisar y
+    // guardar un proceso sin abrir el nodo (config de sesión ausente) enviaría
+    // al backend listas Para/Cc vacías y se perdería la configuración en BD.
+    this.reemplazarHijos(
+      this.contenedorMensajeDe(elemento, 'metadatosMensaje'),
+      () =>
+        this.crearElementosMetadatoMensaje(
+          elemento.ownerDocument,
+          config.destinatarios.referencias,
+          configuraciones,
+        ),
+    );
+    this.reemplazarHijos(
+      this.contenedorMensajeDe(elemento, 'metadatosMensajeCc'),
+      () =>
+        this.crearElementosMetadatoMensaje(
+          elemento.ownerDocument,
+          config.destinatariosCc.referencias,
+          configuraciones,
+        ),
+    );
+    this.reemplazarHijos(
+      this.contenedorMensajeDe(elemento, 'usuariosMensaje'),
+      () => this.crearElementosUsuarioMensaje(elemento.ownerDocument, config),
+    );
+  }
 
-      if (contenedor) {
-        this.reemplazarHijos(contenedor, () => []);
-      } else {
-        elemento.appendChild(elemento.ownerDocument.createElement(etiqueta));
-      }
+  private contenedorMensajeDe(elemento: Element, etiqueta: string): Element {
+    const existente = elemento.getElementsByTagName(etiqueta)[0] ?? null;
+
+    if (existente) {
+      return existente;
     }
+
+    const nuevo = elemento.ownerDocument.createElement(etiqueta);
+    elemento.appendChild(nuevo);
+
+    return nuevo;
+  }
+
+  // Formato espejo del contrato REST: (copia=false→Para, true→Cc) y
+  // (usuario_sistema=true→sistema, false→externo/email), valor en destinatario.
+  private crearElementosUsuarioMensaje(
+    documentXml: Document,
+    config: MensajeConfig,
+  ): Element[] {
+    const elementos: Element[] = [];
+
+    const agregarUsuarios = (
+      destino: MensajeDestinatarios,
+      copia: boolean,
+      sistema: boolean,
+    ): void => {
+      const usuarios = sistema ? destino.usuariosSistema : destino.usuariosExternos;
+
+      for (const destinatario of usuarios) {
+        if (destinatario.trim() === '') {
+          continue;
+        }
+
+        const usuario = documentXml.createElement('usuario');
+        usuario.setAttribute('usuario_sistema', String(sistema));
+        usuario.setAttribute('copia', String(copia));
+        usuario.setAttribute('destinatario', destinatario);
+        elementos.push(usuario);
+      }
+    };
+
+    agregarUsuarios(config.destinatarios, false, true);
+    agregarUsuarios(config.destinatarios, false, false);
+    agregarUsuarios(config.destinatariosCc, true, true);
+    agregarUsuarios(config.destinatariosCc, true, false);
+
+    return elementos;
+  }
+
+  private crearElementosMetadatoMensaje(
+    documentXml: Document,
+    referencias: readonly MensajeReferenciaPar[],
+    configuraciones: ConfiguracionesLegacyXml,
+  ): Element[] {
+    const elementos: Element[] = [];
+
+    for (const referencia of referencias) {
+      if (referencia.idDocumento === null || referencia.idMetadato === null) {
+        continue;
+      }
+
+      const detalle = configuraciones.resolverMetadato(
+        referencia.idDocumento,
+        referencia.idMetadato,
+      );
+      const documento = configuraciones.resolverDocumento(referencia.idDocumento);
+      const docComunId = documento?.docComunId ?? null;
+
+      // Sin doc_comun_id la carga vía REST no puede reasociar la referencia.
+      if (detalle === null || docComunId === null) {
+        continue;
+      }
+
+      const metadato = documentXml.createElement('metadato');
+      metadato.setAttribute('docComunId', String(docComunId));
+      metadato.setAttribute('idMetadato', String(detalle.idMetadato));
+      metadato.setAttribute(
+        'nombreDocComun',
+        documento?.nombreDocumento ?? documento?.nombre ?? '',
+      );
+
+      if (detalle.idBloque !== null) {
+        metadato.setAttribute('idBloque', String(detalle.idBloque));
+      }
+      if (detalle.codigoBloque !== null) {
+        metadato.setAttribute('codigoBloque', detalle.codigoBloque);
+      }
+      metadato.setAttribute('esGrilla', String(detalle.esGrilla));
+      elementos.push(metadato);
+    }
+
+    return elementos;
   }
 
   // ====== timer (nodo) ======
@@ -540,6 +657,9 @@ export class LegacyXmlConfiguracionesService {
       return;
     }
 
+    // Cargo asociado del nodo timer: SOLO en el nodo (aplicarAtributosTimer es
+    // compartido con el timer de transición, que no lleva cargo).
+    elemento.setAttribute('swimlane', config.cargo ?? '');
     this.aplicarAtributosTimer(elemento, config, configuraciones);
   }
 
