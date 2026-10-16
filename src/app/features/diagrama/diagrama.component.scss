@@ -301,12 +301,27 @@
 
 .diagrama__transicion-regla-negocio {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) minmax(0, 1fr) auto;
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto
+    minmax(150px, 220px)
+    auto
+    minmax(0, 1fr);
   gap: 0.55rem;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   padding: 0.65rem;
   margin-bottom: 0.5rem;
+}
+
+// Dividers verticales que seccionan los grupos de controles de cada regla.
+.diagrama__transicion-regla > nz-divider,
+.diagrama__transicion-regla-negocio > nz-divider {
+  align-self: stretch;
+  height: auto;
+  margin-block: 0;
+  margin-inline: 0.15rem;
 }
 
 .diagrama__transicion-regla-col {

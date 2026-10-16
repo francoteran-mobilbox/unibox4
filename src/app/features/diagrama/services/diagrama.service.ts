@@ -18,10 +18,12 @@ import {
   ActividadTareaProceso,
   TareasProcesoResponse,
   MetadatoRequeridoRol,
-  ObtenerDocumentosLivianoResponse,
-  ObtenerUsuariosLivianoResponse,
-  GrupoRaw,
-} from '../models/diagrama.model';
+   ObtenerDocumentosLivianoResponse,
+   ObtenerUsuariosLivianoResponse,
+   GrupoRaw,
+ } from '../models/diagrama.model';
+import { CrearProcesoRequest } from '../models/crear-proceso-request.model';
+import { CrearProcesoResponse } from '../models/diagrama.model';
 
 const PROCESOS_EJECUCION_PATH =
   '/rest-gestor/procesos-ejecucion-gestion/obtenerTodosGestionProcesosEE/';
@@ -40,6 +42,13 @@ const GRUPOS_PATH = '/rest-gestor/grupo/obtenerGrupos';
 const METADATOS_REQUERIDOS_DOCUMENTO_PATH =
   '/rest-gestor/metadatoRequeridoDocumento/obtenerMRDPorIdDoc/';
 const USUARIO_ACTUAL_ID = 'soportemovilgo';
+
+// Endpoint del backend que persiste el proceso. Hardcodeado por decisión
+// (estilo buildLocalUrl); migrarlo a environment cuando exista el host real.
+const CREAR_PROCESO_URL = 'http://localhost:8080/api/processes';
+// Credenciales básicas del backend de procesos (por ahora hardcodeadas;
+// migrar a environment junto con la URL).
+const CREAR_PROCESO_CREDENCIALES = { usuario: 'user', password: 'password' };
 
 @Injectable({ providedIn: 'root' })
 export class DiagramaService {
@@ -115,7 +124,7 @@ export class DiagramaService {
 
   obtenerDocumentosLivianoConfiguracion(): Observable<ObtenerDocumentosLivianoResponse> {
     return this.http.get<ObtenerDocumentosLivianoResponse>(
-      this.buildLocalUrl(DOCUMENTO_LIVIANO_CONFIGURACION_PATH),
+      this.buildUrl(DOCUMENTO_LIVIANO_CONFIGURACION_PATH),
     );
   }
 
@@ -135,6 +144,18 @@ export class DiagramaService {
     return this.http.get<ObtenerUsuariosLivianoResponse>(
       this.buildApiUrl(USUARIOS_LIVIANO_PATH),
     );
+  }
+
+  // Crea el proceso en el backend. Responde 201 Created con { processId }.
+  // Basic auth: btoa se calcula dentro del método (no a nivel de módulo).
+  crearProceso(request: CrearProcesoRequest): Observable<CrearProcesoResponse> {
+    const headers = new HttpHeaders({
+      Authorization: `Basic ${btoa(
+        `${CREAR_PROCESO_CREDENCIALES.usuario}:${CREAR_PROCESO_CREDENCIALES.password}`,
+      )}`,
+    });
+
+    return this.http.post<CrearProcesoResponse>(CREAR_PROCESO_URL, request, { headers });
   }
 
   private buildUrl(path: string): string {

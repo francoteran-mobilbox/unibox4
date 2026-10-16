@@ -68,4 +68,21 @@ describe('DiagramaService', () => {
       { id_grupo: 1, nombre_grupo: 'Administradores', sigla_grupo: 'adm', lista_permisos_grupo: [] },
     ]);
   });
+
+  it('crea el proceso con POST al endpoint /api/processes (hardcodeado localhost:8080)', () => {
+    const request = { processId: null, processName: 'Proceso Test' } as any;
+    let respuesta: { processId: number } | undefined;
+
+    service.crearProceso(request).subscribe((res) => (respuesta = res));
+
+    const req = httpMock.expectOne((r) => r.url === 'http://localhost:8080/api/processes');
+
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBe(request);
+    expect(req.request.headers.get('Authorization')).toBe('Basic dXNlcjpwYXNzd29yZA==');
+
+    req.flush({ processId: 1309 }, { status: 201, statusText: 'Created' });
+
+    expect(respuesta).toEqual({ processId: 1309 });
+  });
 });

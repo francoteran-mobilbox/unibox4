@@ -272,6 +272,11 @@ export interface ObtenerUsuariosLivianoResponse {
   readonly usuarios: readonly UsuarioLiviano[];
 }
 
+/** Respuesta 201 Created del POST /api/processes. */
+export interface CrearProcesoResponse {
+  readonly processId: number;
+}
+
 export interface DocumentoComunAdjuntoMensaje {
   readonly id_mensaje?: number;
   readonly nombre_documento_comun?: string;

@@ -39,6 +39,7 @@ const DIAGRAMA_SERVICE_SPY = jasmine.createSpyObj<DiagramaService>('DiagramaServ
   'obtenerDocumentosComunProcesoSegunProcessId',
   'obtenerTareasProceso',
   'obtenerXmlPathPorIdProceso',
+  'crearProceso',
 ]);
 
 const BPMN_ADAPTER_SPY = jasmine.createSpyObj<BpmnAdapterService>('BpmnAdapterService', [
@@ -78,6 +79,9 @@ describe('DiagramaComponent', () => {
       of({ activities: [], transitions: [] }),
     );
     DIAGRAMA_SERVICE_SPY.obtenerXmlPathPorIdProceso.and.returnValue(of(''));
+    // Contador limpio por test: los asserts de creación no arrastran llamadas previas.
+    DIAGRAMA_SERVICE_SPY.crearProceso.calls.reset();
+    DIAGRAMA_SERVICE_SPY.crearProceso.and.returnValue(of({ processId: 1309 }));
     BPMN_ADAPTER_SPY.preloadLibrary.and.returnValue(Promise.resolve());
 
     await TestBed.configureTestingModule({
@@ -663,7 +667,8 @@ describe('DiagramaComponent', () => {
       await component.onGuardarProcesoModal();
 
       expect(component.procesoDiagramaInvalido()).toBeFalse();
-      expect(component.procesos()[0]?.xml).toBe(LIVE_XML);
+      // El xml del visor viaja dentro del request (ya no se persiste en una fila local).
+      expect(DIAGRAMA_SERVICE_SPY.crearProceso).toHaveBeenCalledTimes(1);
       expect(component.procesoModalVisible()).toBeFalse();
     });
 
@@ -755,10 +760,12 @@ describe('DiagramaComponent', () => {
       component.procesoDiagramTouched.set(true);
     }
 
-    it('mecanismo por defecto guarda sin configuración', async () => {
+    it('mecanismo por defecto crea el proceso via POST y recarga el listado', async () => {
       const fixture = TestBed.createComponent(DiagramaComponent);
       fixture.detectChanges();
       const component = fixture.componentInstance as any;
+      let recargasAntes =
+        DIAGRAMA_SERVICE_SPY.obtenerProcesos.calls.count();
 
       component.onAbrirCrearProcesoModal();
       instalarPreview(component);
@@ -769,8 +776,22 @@ describe('DiagramaComponent', () => {
 
       expect(component.procesoValidacionError()).toEqual([]);
       expect(component.procesoMecanismoError()).toBe('');
-      expect(component.procesos()[0]?.xml).toBe(LIVE_XML);
+      // Se envió el request completo al POST /api/processes.
+      expect(DIAGRAMA_SERVICE_SPY.crearProceso).toHaveBeenCalledTimes(1);
+      expect(
+        DIAGRAMA_SERVICE_SPY.crearProceso.calls.mostRecent().args[0],
+      ).toEqual(
+        jasmine.objectContaining({
+          proceso: jasmine.objectContaining({
+            processId: null,
+            processName: 'Proceso Test',
+          }),
+        }),
+      );
+      // El listado se recarga con el backend ya no con una fila local.
+      expect(DIAGRAMA_SERVICE_SPY.obtenerProcesos.calls.count()).toBe(recargasAntes + 1);
       expect(component.procesoModalVisible()).toBeFalse();
+      expect(component.procesoGuardando()).toBeFalse();
     });
 
     it('mecanismo no por defecto sin configuración lista el campo obligatorio y muestra el error', async () => {
@@ -812,11 +833,35 @@ describe('DiagramaComponent', () => {
 
       expect(component.procesoValidacionError()).toEqual([]);
       expect(component.procesoMecanismoError()).toBe('');
-      expect(component.procesos()[0]?.xml).toBe(LIVE_XML);
+      expect(DIAGRAMA_SERVICE_SPY.crearProceso).toHaveBeenCalledTimes(1);
+      expect(DIAGRAMA_SERVICE_SPY.obtenerProcesos).toHaveBeenCalled();
       expect(component.procesoModalVisible()).toBeFalse();
     });
 
-    it('sin mecanismo seleccionado lista "Mecanismo de denominación"', async () => {
+    it('el fallo del POST deja el modal abierto con la alerta de error', async () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+
+      DIAGRAMA_SERVICE_SPY.crearProceso.and.returnValue(
+        throwError(() => new Error('backend down')),
+      );
+
+      component.onAbrirCrearProcesoModal();
+      instalarPreview(component);
+      component.mecanismosMap.set({ m1: MECANISMO_POR_DEFECTO });
+      prepararFormulario(component, 'm1');
+
+      await component.onGuardarProcesoModal();
+
+      expect(component.procesoValidacionError()).toEqual([
+        'No se pudo crear el proceso. Intenta nuevamente.',
+      ]);
+      expect(component.procesoModalVisible()).toBeTrue();
+      expect(component.procesoGuardando()).toBeFalse();
+    });
+
+    it('una validación bloqueante no dispara el POST', async () => {
       const fixture = TestBed.createComponent(DiagramaComponent);
       fixture.detectChanges();
       const component = fixture.componentInstance as any;
@@ -828,10 +873,8 @@ describe('DiagramaComponent', () => {
       await component.onGuardarProcesoModal();
 
       expect(component.procesoValidacionError()).toContain('Mecanismo de denominación');
-      expect(component.procesoValidacionError()).not.toContain(
-        'Mecanismo de denominación (configuración)',
-      );
       expect(component.procesos().length).toBe(0);
+      expect(DIAGRAMA_SERVICE_SPY.crearProceso).not.toHaveBeenCalled();
     });
   });
 
@@ -942,6 +985,38 @@ describe('DiagramaComponent', () => {
       const fila = component.formulariosProceso().find((f: any) => f.id === 'fp-1');
       expect(fila.idFormulario).toBe(795);
       expect(fila.nombre).toBe('Solicitud Renombrada');
+      expect(component.formularioEditAviso()).toBe('');
+    });
+
+    it('no permite crear un formulario con nombre repetido (trim + case-insensitive)', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+      configurarFormularioEnUso(component);
+
+      component.abrirFormularioEditModal();
+      component.formularioEditNombre.set('  solicitud  ');
+      component.formularioEditDocumentoValor.set('660');
+      component.guardarFormularioEdit();
+
+      expect(component.formularioEditAviso()).toContain('Ya existe un formulario');
+      expect(component.formulariosProceso().length).toBe(2);
+      expect(component.formularioEditModalAbierto()).toBeTrue();
+    });
+
+    it('editar una fila manteniendo su propio nombre guarda sin aviso de duplicado', () => {
+      const fixture = TestBed.createComponent(DiagramaComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance as any;
+      configurarFormularioEnUso(component);
+
+      component.abrirFormularioEditModalExistente('fp-2');
+      component.formularioEditNombre.set('FLAG');
+      component.formularioEditDocumentoValor.set('660');
+      component.guardarFormularioEdit();
+
+      const fila = component.formulariosProceso().find((f: any) => f.id === 'fp-2');
+      expect(fila.nombre).toBe('FLAG');
       expect(component.formularioEditAviso()).toBe('');
     });
 

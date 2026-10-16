@@ -471,7 +471,7 @@ export class CrearProcesoRequestBuilder {
           timer:
             activitytypeId === 'timer'
               ? timerConfig !== undefined
-                ? this.buildTimerTransicion(timerConfig, extras)
+                ? this.buildTimerTransicion(timerConfig, extras, formulariosProceso)
                 : this.parseTimerDelXml(nodo)
               : null,
           mensaje:
@@ -1075,7 +1075,7 @@ export class CrearProcesoRequestBuilder {
           const esTimerXml = transicion.getAttribute('esTimer') === 'true';
 
           const timer = requiereTimer
-            ? this.buildTimerTransicion(config.timer, extras)
+            ? this.buildTimerTransicion(config.timer, extras, formulariosProceso)
             : esTimerXml
               ? this.parseTimerTransicionDelXml(transicion)
               : null;
@@ -1257,6 +1257,7 @@ export class CrearProcesoRequestBuilder {
   private buildTimerTransicion(
     timer: TimerConfig,
     extras?: CrearProcesoRequestExtras,
+    formulariosProceso?: readonly FormularioProcesoConfig[],
   ): TimerTransicionRequest {
     if (timer.modo === 'metadatoFormulario') {
       const resuelto =
@@ -1271,6 +1272,7 @@ export class CrearProcesoRequestBuilder {
         docComunId: null,
         idBloque: resuelto?.idBloque ?? -1,
         idMetadato,
+        nombreDocComun: this.nombreDocComunDe(timer.idDocumento, formulariosProceso, extras),
         esDatoFijo: false,
         esTiempo: false,
         datoFijo: '0',
@@ -1319,6 +1321,7 @@ export class CrearProcesoRequestBuilder {
       nodo.getAttribute('idMetadato'),
       nodo.getAttribute('idBloque'),
       nodo.getAttribute('docComunId'),
+      nodo.getAttribute('nombreDocComunProceso'),
     );
   }
 
@@ -1340,6 +1343,7 @@ export class CrearProcesoRequestBuilder {
         null,
         null,
         null,
+        null,
       );
     }
 
@@ -1353,6 +1357,7 @@ export class CrearProcesoRequestBuilder {
       timerTransicion.getAttribute('idMetadato'),
       timerTransicion.getAttribute('idBloque'),
       timerTransicion.getAttribute('docComunId'),
+      timerTransicion.getAttribute('nombreDocComunProceso'),
     );
   }
 
@@ -1366,6 +1371,7 @@ export class CrearProcesoRequestBuilder {
     idMetadato: string | null,
     idBloque: string | null,
     docComunId: string | null,
+    nombreDocComun: string | null = null,
   ): TimerTransicionRequest {
     return {
       idTimerProceso: null,
@@ -1373,6 +1379,8 @@ export class CrearProcesoRequestBuilder {
       docComunId: this.parsearNumeroOpcional(docComunId),
       idBloque: this.parsearNumeroOpcional(idBloque),
       idMetadato: this.parsearNumeroOpcional(idMetadato),
+      // Solo viaja cuando el XML lo trae: el shape base (datoFijo) no cambia.
+      ...(nombreDocComun !== null && nombreDocComun !== '' ? { nombreDocComun } : {}),
       esDatoFijo: !esMetFormulario,
       esTiempo,
       datoFijo: esMetFormulario ? '0' : (datoFijo ?? '0'),

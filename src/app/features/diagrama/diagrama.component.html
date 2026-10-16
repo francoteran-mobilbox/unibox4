@@ -309,6 +309,9 @@
       [nzTitle]="procesoModalTitulo()"
       [nzMaskClosable]="false"
       [nzOkText]="procesoModalBotonGuardarLabel()"
+      [nzOkLoading]="procesoGuardando()"
+      [nzOkDisabled]="procesoGuardando()"
+      [nzCancelDisabled]="procesoGuardando()"
       nzCancelText="Cancelar"
       [nzWidth]="isDesktop() ? 900 : 'calc(100vw - 32px)'"
       nzClassName="proceso-form-modal"
@@ -1524,22 +1527,23 @@
                         }
                       </nz-select>
 
-                      @if(  transicionInterpretacionHabilitada(regla)){
-                        <nz-radio-group
-                          formControlName="interpretacion"
-                          nz-tooltip
-                          nzTooltipTitle="Solo disponible para metadatos tipo CBX"
-                        >
-                          <label nz-radio nzValue="id">id</label>
-                          <label nz-radio nzValue="texto">texto</label>
-                        </nz-radio-group>
-                      }
-                    </div>
-                    <div class="diagrama__transicion-regla-col">
-                      <nz-select
-                        formControlName="idCargo"
-                        nzPlaceHolder="Cargo"
-                      >
+                       @if(  transicionInterpretacionHabilitada(regla)){
+                         <nz-radio-group
+                           formControlName="interpretacion"
+                           nz-tooltip
+                           nzTooltipTitle="Solo disponible para metadatos tipo CBX"
+                         >
+                           <label nz-radio nzValue="id">id</label>
+                           <label nz-radio nzValue="texto">texto</label>
+                         </nz-radio-group>
+                       }
+                     </div>
+                     <nz-divider  />
+                     <div class="diagrama__transicion-regla-col">
+                       <nz-select
+                         formControlName="idCargo"
+                         nzPlaceHolder="Cargo"
+                       >
                         @for (cargo of transicionCargosDestinoOptions(); track cargo.value) {
                           <nz-option [nzValue]="cargo.value" [nzLabel]="cargo.label" />
                         }
@@ -1607,32 +1611,34 @@
                           <nz-option [nzValue]="doc.value" [nzLabel]="doc.label" />
                         }
                       </nz-select>
-                      <nz-select
-                        formControlName="idMetadato"
-                        nzPlaceHolder="Metadato"
-                        nzAllowClear
-                        [nzDisabled]="regla.controls.idDocumento.value === ''"
-                      >
-                        @for (
-                          option of metadatosDeDocumento(regla.controls.idDocumento.value);
-                          track option.value
-                        ) {
-                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
-                        }
-                      </nz-select>
-                    </div>
-                    <div class="diagrama__transicion-regla-col diagrama__transicion-regla-col--operador">
-                      <nz-select formControlName="operador" nzPlaceHolder="Operador" nzAllowClear>
-                        @for (option of transicionOperadoresDeFila(regla); track option.value) {
-                          <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
-                        }
-                      </nz-select>
-                      <nz-radio-group formControlName="fuenteValor">
-                        <label nz-radio nzValue="valor">valor</label>
-                        <label nz-radio nzValue="otroMetadato">otro metadato</label>
-                      </nz-radio-group>
-                    </div>
-                    <div class="diagrama__transicion-regla-col">
+                       <nz-select
+                         formControlName="idMetadato"
+                         nzPlaceHolder="Metadato"
+                         nzAllowClear
+                         [nzDisabled]="regla.controls.idDocumento.value === ''"
+                       >
+                         @for (
+                           option of metadatosDeDocumento(regla.controls.idDocumento.value);
+                           track option.value
+                         ) {
+                           <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                         }
+                       </nz-select>
+                     </div>
+                     <nz-divider  />
+                     <div class="diagrama__transicion-regla-col diagrama__transicion-regla-col--operador">
+                       <nz-select formControlName="operador" nzPlaceHolder="Operador" nzAllowClear>
+                         @for (option of transicionOperadoresDeFila(regla); track option.value) {
+                           <nz-option [nzValue]="option.value" [nzLabel]="option.label" />
+                         }
+                       </nz-select>
+                       <nz-radio-group formControlName="fuenteValor">
+                         <label nz-radio nzValue="valor">valor</label>
+                         <label nz-radio nzValue="otroMetadato">otro metadato</label>
+                       </nz-radio-group>
+                     </div>
+                     <nz-divider  />
+                     <div class="diagrama__transicion-regla-col">
                       @if (regla.controls.fuenteValor.value === 'valor') {
                         <input
                           nz-input

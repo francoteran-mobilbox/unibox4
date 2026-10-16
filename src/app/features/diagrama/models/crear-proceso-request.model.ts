@@ -306,6 +306,9 @@ export interface TimerTransicionRequest {
   readonly docComunId: number | null;
   readonly idBloque: number | null;
   readonly idMetadato: number | null;
+  // Nombre del formulario de proceso seleccionado: solo viaja en modo
+  // metadatoFormulario (espejo del attr nombreDocComunProceso del XML).
+  readonly nombreDocComun?: string | null;
   readonly esDatoFijo: boolean;
   readonly esTiempo: boolean;
   readonly datoFijo: string;

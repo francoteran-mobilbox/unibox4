@@ -25,6 +25,7 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
 import { NzCollapseModule } from 'ng-zorro-antd/collapse';
+import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzIconModule } from 'ng-zorro-antd/icon';
@@ -375,6 +376,7 @@ const MODAL_FORM_DEFAULTS: ProcesoModalFormValue = {
     NzCardModule,
     NzCheckboxModule,
     NzCollapseModule,
+    NzDividerModule,
     NzEmptyModule,
     NzFormModule,
     NzIconModule,
@@ -1864,6 +1866,8 @@ export class DiagramaComponent {
   protected readonly procesoMecanismoError = signal('');
   protected readonly procesoAdvertenciaEjecucion = signal('');
   protected readonly procesoValidacionError = signal<readonly string[]>([]);
+  // El POST de creación está en curso: bloquea doble submit (botón en carga).
+  protected readonly procesoGuardando = signal(false);
   // True mientras la carga REST de la configuración del proceso en edición está en
   // curso: evita guardar con mensajeConfigs/tareaConfigs incompletos (race).
   protected readonly procesoConfiguracionCargando = signal(false);
@@ -3593,26 +3597,28 @@ export class DiagramaComponent {
     };
 
     if (this.procesoModalMode() === 'create') {
-      const nextId =
-        this.procesos().reduce((max, current) => Math.max(max, current.id_proceso), 0) + 1;
-      const nuevoProceso: ProcesoConfiguracion = {
-        id_proceso: nextId,
-        modificado_por: 'usuario.local',
-        distribucion_requerida: false,
-        xml: liveXml,
-        nombre_proceso: formValue.nombre.trim(),
-        id_organigrama: 0,
-        ultima_modificacion: nowIso,
-        id_padre: 0,
-        privado: formValue.visibilidad === 'privado',
-        version: 1,
-        es_oficina_partes: false,
-        compartido: formValue.visibilidad === 'publico',
-        proceso_compartido: payload.proceso_compartido,
-        id_catalogo: formValue.catalogosPublicacion.map((id) => Number(id)),
-      };
+      if (request === null) {
+        this.procesoValidacionError.set([
+          'No se pudo construir la configuración del proceso (el diagramador no está disponible). Reintente.',
+        ]);
+        return;
+      }
 
-      this.procesos.set([nuevoProceso, ...this.procesos()]);
+      this.procesoGuardando.set(true);
+      this.diagramaService.crearProceso(request).subscribe({
+        next: () => {
+          // 201 Created: el listado refleja lo persistido en el backend.
+          this.cargarProcesos();
+          this.cerrarProcesoModalTrasGuardar();
+        },
+        error: () => {
+          this.procesoGuardando.set(false);
+          this.procesoValidacionError.set([
+            'No se pudo crear el proceso. Intenta nuevamente.',
+          ]);
+        },
+      });
+      return;
     } else {
       const editId = this.procesoEditId();
       if (editId !== null) {
@@ -3643,6 +3649,13 @@ export class DiagramaComponent {
       console.log('CrearProcesoRequest', request);
     }
 
+    // La simulación de edición comparte la secuencia de cierre con el POST real.
+    this.cerrarProcesoModalTrasGuardar();
+  }
+
+  // Cierre del modal luego de persistir el proceso (POST 201 o simulación de edición).
+  private cerrarProcesoModalTrasGuardar(): void {
+    this.procesoGuardando.set(false);
     this.procesoModalVisible.set(false);
     this.procesoDiagramModalVisible.set(false);
     // Termina la sesión del proceso: el visor se destruye y la próxima sesión
@@ -3826,11 +3839,25 @@ export class DiagramaComponent {
       return;
     }
 
+    const id = this.formularioEditId();
+
+    // Los nombres de formularios de proceso no pueden repetirse (trim +
+    // case-insensitive); al editar la propia fila no se compara consigo misma.
+    if (
+      this.formulariosProceso().some(
+        (f) => f.id !== id && f.nombre.trim().toLowerCase() === nombre.toLowerCase(),
+      )
+    ) {
+      this.formularioEditAviso.set(
+        `Ya existe un formulario de proceso con el nombre "${nombre}".`,
+      );
+      return;
+    }
+
     const idFormulario = Number(valorDocumento);
     const documento = this.documentosLivianoOptions().find(
       (o) => o.value === valorDocumento,
     );
-    const id = this.formularioEditId();
     const visibilidad = this.formularioEditVisibilidad();
 
     if (id === null) {

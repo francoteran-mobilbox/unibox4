@@ -95,7 +95,7 @@ const XML_CON_TIMER = `<?xml version="1.0" encoding="UTF-8"?>
   </timer>
   <task-node name="Tarea" id="Tarea 1">
     <transition to="Fin 1" id="Transicion 2" esTimer="true" interrupcion="true">
-      <timerTransicion esTiempo="false" esMetFormulario="true" idBloque="5646" idMetadato="1483" datoFijo="0" idUnidadTiempo="" fecha="" hora="" />
+      <timerTransicion esTiempo="false" esMetFormulario="true" idBloque="5646" idMetadato="1483" datoFijo="0" idUnidadTiempo="" fecha="" hora="" nombreDocComunProceso="Flag Solicitud" />
     </transition>
   </task-node>
   <end-state name="Fin 1" id="Fin 1" />
@@ -871,6 +871,7 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
       docComunId: null,
       idBloque: 5646,
       idMetadato: 1483,
+      nombreDocComun: null,
       esDatoFijo: false,
       esTiempo: false,
       datoFijo: '0',
@@ -1264,6 +1265,39 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
     });
   });
 
+  it('el timer nodo metFormulario viaja con nombreDocComun del formulario seleccionado', () => {
+    const builder = new CrearProcesoRequestBuilder();
+
+    const request = builder.buildRequest(FORM_SOURCE, XML_CON_TIMER, 'admin', undefined, [
+      { id: 'f1', nombre: 'Flag', idFormulario: 660, visibilidad: 'privado' },
+    ], {
+      timerConfigs: {
+        'Timer 1': {
+          ...buildDefaultTimerConfig(),
+          cargo: '46',
+          modo: 'metadatoFormulario',
+          idDocumento: 660,
+          idMetadato: 'BM2177-1483',
+        },
+      },
+      resolverMetadato: construirResolver({
+        'BM2177-1483': { idMetadato: 1483, idBloque: 5646, codigoBloque: 'BM2177', tipo: 'NUM' },
+      }),
+    });
+
+    const timerActivity = request.actividades.find(
+      (wrapper) => wrapper.actividad.activitytypeId === 'timer',
+    );
+
+    expect(timerActivity?.timer).toEqual(
+      jasmine.objectContaining({
+        esMetFormulario: true,
+        nombreDocComun: 'Flag',
+        idMetadato: 1483,
+      }),
+    );
+  });
+
   it('la transición con esTimer en el XML sin config recupera el timerTransicion y la interrupción', () => {
     const builder = new CrearProcesoRequestBuilder();
 
@@ -1279,6 +1313,7 @@ describe('CrearProcesoRequestBuilder - actividades y transiciones', () => {
       docComunId: null,
       idBloque: 5646,
       idMetadato: 1483,
+      nombreDocComun: 'Flag Solicitud',
       esDatoFijo: false,
       esTiempo: false,
       datoFijo: '0',
